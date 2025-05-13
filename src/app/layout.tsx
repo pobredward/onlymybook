@@ -2,6 +2,7 @@ import './globals.css';
 import type { Metadata } from 'next';
 import { Inter, Noto_Serif_KR } from 'next/font/google';
 import { Analytics } from '@vercel/analytics/react';
+import { AuthProvider } from '@/contexts/AuthContext';
 
 const inter = Inter({ 
   subsets: ['latin'],
@@ -32,7 +33,9 @@ export default function RootLayout({
   return (
     <html lang="ko" className={`${inter.variable} ${notoSerifKr.variable}`}>
       <body className="min-h-screen bg-white font-sans">
-        {children}
+        <AuthProvider>
+          {children}
+        </AuthProvider>
         <Analytics />
       </body>
     </html>

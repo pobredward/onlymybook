@@ -1,115 +1,109 @@
 'use client';
 
-import React, { useState, FormEvent } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { TextArea } from '@/components/ui/TextArea';
-import { Button } from '@/components/ui/Button';
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { PREVIEW_QUESTIONS } from '@/constants/questions';
-import { generatePreview } from '@/lib/gpt';
-import { getOrCreateUser, savePreviewStory } from '@/lib/db';
+import { Button } from '@/components/ui/Button';
+import { motion } from 'framer-motion';
 
-export default function WritePage() {
+export default function WriteMethodSelect() {
   const router = useRouter();
-  const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
 
-  const handleInputChange = (questionId: string, value: string) => {
-    setAnswers(prev => ({ ...prev, [questionId]: value }));
-  };
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      // 필수 답변 확인
-      for (const question of PREVIEW_QUESTIONS) {
-        if (!answers[question.id] || answers[question.id].trim() === '') {
-          throw new Error('모든 질문에 답해주세요.');
-        }
-      }
-
-      // AI로 자서전 미리보기 생성
-      const content = await generatePreview(answers);
-      
-      // 익명 사용자 생성 또는 가져오기
-      const userId = await getOrCreateUser();
-      
-      // 미리보기 스토리 저장
-      const storyId = await savePreviewStory(userId, content);
-      
-      // 미리보기 페이지로 이동
-      router.push(`/preview/${storyId}`);
-    } catch (err) {
-      console.error('Error generating preview:', err);
-      setError(err instanceof Error ? err.message : '미리보기 생성 중 오류가 발생했습니다.');
-    } finally {
-      setIsLoading(false);
+  const handleSelect = (method: string) => {
+    setSelected(method);
+    
+    // 선택한 방식을 로컬 스토리지에 저장
+    localStorage.setItem('autobiography_writing_method', method);
+    
+    // 페이지 이동
+    if (method === 'ai') {
+      router.push('/write/personal');
+    } else {
+      router.push('/write/manual');
     }
   };
 
   return (
-    <MainLayout 
-      title="자서전 작성하기 - 디지털 자서전" 
-      description="간단한 질문에 답하고 당신만의 디지털 자서전 미리보기를 만나보세요."
+    <MainLayout
+      title="자서전 작성 방식 선택"
+      description="자서전을 작성하는 방식을 선택해주세요."
     >
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="text-center mb-12">
-          <h1 className="text-3xl font-extrabold text-gray-900 sm:text-4xl">
-            당신의 이야기를 들려주세요
+          <h1 className="text-2xl xs:text-3xl font-extrabold text-gray-900 sm:text-4xl">
+            자서전 작성하기
           </h1>
-          <p className="mt-4 text-xl text-gray-500">
-            간단한 두 가지 질문에 답하고 AI가 만든 당신의 자서전 미리보기를 확인하세요.
+          <p className="mt-4 text-base sm:text-xl text-gray-500">
+            자서전을 작성하는 방식을 선택해주세요.
           </p>
         </div>
 
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 text-red-700 rounded-lg">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-8">
-          {PREVIEW_QUESTIONS.map((question) => (
-            <div key={question.id} className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-              <TextArea
-                label={question.text}
-                placeholder={question.placeholder}
-                value={answers[question.id] || ''}
-                onChange={(e) => handleInputChange(question.id, e.target.value)}
-                disabled={isLoading}
-              />
-            </div>
-          ))}
-
-          <div className="flex justify-center mt-8">
-            <Button 
-              type="submit" 
-              variant="primary" 
-              size="lg" 
-              isLoading={isLoading}
-              disabled={isLoading}
-            >
-              자서전 미리보기 생성하기
-            </Button>
-          </div>
-        </form>
-
-        {isLoading && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white p-8 rounded-xl shadow-xl max-w-md text-center">
-              <LoadingSpinner size="lg" />
-              <p className="mt-4 text-xl font-semibold">당신의 자서전을 생성 중입니다...</p>
-              <p className="mt-2 text-gray-500">
-                잠시만 기다려주세요. 당신의 이야기를 아름답게 담아내고 있습니다.
+        <div className="grid md:grid-cols-2 gap-8 mt-12">
+          {/* GPT로 작성하기 */}
+          <motion.div 
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.98 }}
+            className={`
+              p-6 rounded-xl border-2 cursor-pointer transition-all
+              ${selected === 'ai' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300'}
+            `}
+            onClick={() => handleSelect('ai')}
+          >
+            <div className="flex flex-col items-center text-center p-4">
+              <div className="bg-blue-100 p-4 rounded-full mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold mb-2">GPT로 작성하기</h3>
+              <p className="text-gray-600 mb-4">
+                질문에 답변하면 AI가 자동으로 자서전을 생성해 드립니다. 풍부하고 감성적인 문체로 당신의 이야기를 표현합니다.
               </p>
+              <Button 
+                variant="primary" 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleSelect('ai');
+                }}
+              >
+                선택하기
+              </Button>
             </div>
-          </div>
-        )}
+          </motion.div>
+
+          {/* 직접 작성하기 */}
+          <motion.div 
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.98 }}
+            className={`
+              p-6 rounded-xl border-2 cursor-pointer transition-all
+              ${selected === 'manual' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-blue-300'}
+            `}
+            onClick={() => handleSelect('manual')}
+          >
+            <div className="flex flex-col items-center text-center p-4">
+              <div className="bg-green-100 p-4 rounded-full mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold mb-2">직접 작성하기</h3>
+              <p className="text-gray-600 mb-4">
+                자신만의 문체와 표현으로 직접 자서전을 작성합니다. 마크다운 편집기를 통해 자유롭게 글을 쓰고 편집할 수 있습니다.
+              </p>
+              <Button 
+                variant="secondary" 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleSelect('manual');
+                }}
+              >
+                선택하기
+              </Button>
+            </div>
+          </motion.div>
+        </div>
       </div>
     </MainLayout>
   );

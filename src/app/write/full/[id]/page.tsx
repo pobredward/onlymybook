@@ -34,7 +34,13 @@ export default function FullWritePage() {
         
         if (!storyData.isPreview) {
           // 이미 전체 버전이 있는 경우
-          router.push(`/story/${storyId}`);
+          if (storyData.shareUrl) {
+            router.push(storyData.shareUrl);
+          } else if (storyData.userId && storyData.storyNumber) {
+            router.push(`/story/${storyData.userId}/${storyData.storyNumber}`);
+          } else {
+            router.push(`/story/${storyId}`);
+          }
           return;
         }
         
@@ -86,7 +92,14 @@ export default function FullWritePage() {
       const fullStoryId = await saveFullStory(story?.userId || '', content, storyId);
       
       // 완성된 자서전 페이지로 이동
-      router.push(`/story/${fullStoryId}`);
+      const savedStory = await getStory(fullStoryId);
+      if (savedStory?.shareUrl) {
+        router.push(savedStory.shareUrl);
+      } else if (savedStory?.userId && savedStory?.storyNumber) {
+        router.push(`/story/${savedStory.userId}/${savedStory.storyNumber}`);
+      } else {
+        router.push(`/story/${fullStoryId}`);
+      }
     } catch (err) {
       console.error('Error generating full memoir:', err);
       setError(err instanceof Error ? err.message : '자서전 생성 중 오류가 발생했습니다.');

@@ -28,7 +28,13 @@ export default function PurchasePage() {
         
         if (!storyData.isPreview) {
           // 이미 전체 버전을 구매한 경우
-          router.push(`/story/${storyId}`);
+          if (storyData.shareUrl) {
+            router.push(storyData.shareUrl);
+          } else if (storyData.userId && storyData.storyNumber) {
+            router.push(`/story/${storyData.userId}/${storyData.storyNumber}`);
+          } else {
+            router.push(`/story/${storyId}`);
+          }
           return;
         }
         
