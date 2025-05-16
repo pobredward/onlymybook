@@ -8,6 +8,7 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import ReactMarkdown from 'react-markdown';
 import { Chapter } from '@/types/manual-editor';
 import { toast } from 'sonner';
+import { Descendant } from 'slate';
 
 export default function ManualPreviewPage() {
   const router = useRouter();
@@ -85,8 +86,11 @@ export default function ManualPreviewPage() {
         }
         
         // 섹션 내용 추가
-        if (section.content.trim()) {
-          markdown += `${section.content.trim()}\n\n`;
+        const plain = richTextToPlainText(section.content);
+        if (plain.trim()) {
+          markdown += `${plain.trim()}
+
+`;
         }
       });
       
@@ -100,6 +104,18 @@ export default function ManualPreviewPage() {
     return markdown.replace(/\n{3,}/g, '\n\n');
   };
 
+  // Descendant[]를 plain text로 변환하는 함수
+  function richTextToPlainText(content: Descendant[]): string {
+    if (!Array.isArray(content)) return '';
+    return content.map((node: Descendant) => {
+      if (typeof node === 'object' && 'text' in node) return node.text as string;
+      if (typeof node === 'object' && 'children' in node && Array.isArray(node.children)) {
+        return richTextToPlainText(node.children as Descendant[]);
+      }
+      return '';
+    }).join('');
+  }
+
   const handlePreviousStep = () => {
     router.push('/write/manual');
   };
@@ -112,12 +128,24 @@ export default function ManualPreviewPage() {
       // TODO: 백엔드 저장 로직 (현재는 로컬 스토리지 데이터만 유지)
       localStorage.setItem('autobiography_manual_published', localStorage.getItem('autobiography_manual_content') || '');
       
+      // 자서전 저장 시 userId, latestStoryId, storyNumber도 localStorage에 저장
+      if (typeof window !== 'undefined') {
+        const userId = 'local_user'; // 미로그인/로컬 작성 구분용
+        const latestStoryId = 'local_story';
+        const storyNumber = 1; // 여러 개 지원 시 증가 필요
+        localStorage.setItem('autobiography_personal_info', JSON.stringify({
+          userId,
+          latestStoryId,
+          storyNumber
+        }));
+      }
+      
       toast.success('자서전이 성공적으로 저장되었습니다.');
       
       // 저장 완료 후 페이지 이동
       setTimeout(() => {
         setIsSaving(false);
-        router.push('/write/manual/complete');
+        router.push('/write/complete');
       }, 1000);
     } catch (error: unknown) {
       console.error('저장 오류:', error);

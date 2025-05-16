@@ -13,15 +13,12 @@ import {
   documentId,
   orderBy,
   limit as firestoreLimit,
-  increment,
   QueryConstraint,
   serverTimestamp,
-  startAfter,
   deleteDoc
 } from 'firebase/firestore';
 import { Story, User, Reaction } from '@/types';
 import { signInAnonymously, getAuth } from 'firebase/auth';
-import { getGuestId, getCookie } from '@/lib/cookies';
 import { setCookie } from 'cookies-next';
 
 // 익명 사용자 로그인 (or 이미 로그인된 경우 현재 사용자 반환)
@@ -190,7 +187,7 @@ export const savePreviewStoryWithoutLogin = async (content: string): Promise<str
       userId,
       storyNumber,
       title: '디지털 자서전',
-      content,
+      content: typeof content === 'string' ? content : JSON.stringify(content),
       createdAt: Date.now(),
       updatedAt: Date.now(),
       isPreview: true,
@@ -303,7 +300,7 @@ export const savePreviewStory = async (userId: string, content: string): Promise
       userId,
       storyNumber,
       title: '디지털 자서전',
-      content,
+      content: typeof content === 'string' ? content : JSON.stringify(content),
       createdAt: Date.now(),
       updatedAt: Date.now(),
       isPreview: true,
@@ -354,7 +351,7 @@ export const savePreviewStory = async (userId: string, content: string): Promise
 };
 
 // 전체 스토리 저장
-export const saveFullStory = async (userId: string, content: string, previewStoryId?: string): Promise<string> => {
+export const saveFullStory = async (userId: string, content: string | object, previewStoryId?: string): Promise<{ storyId: string, userId: string, storyNumber: number }> => {
   try {
     // 사용자의 스토리 개수 확인
     let storyNumber = 1;
@@ -375,7 +372,7 @@ export const saveFullStory = async (userId: string, content: string, previewStor
       userId,
       storyNumber,
       title: '디지털 자서전',
-      content,
+      content: typeof content === 'string' ? content : JSON.stringify(content),
       updatedAt: Date.now(),
       isPreview: false,
       isPaid: true,
@@ -438,7 +435,7 @@ export const saveFullStory = async (userId: string, content: string, previewStor
       await updateUserStory(userId, storyId);
     }
     
-    return storyId;
+    return { storyId, userId, storyNumber };
   } catch (error) {
     console.error('Error saving full story:', error);
     throw new Error('스토리 저장 중 오류가 발생했습니다.');
@@ -483,10 +480,60 @@ export async function getStory(id: string): Promise<Story | null> {
       return null;
     }
     
-    // 여기서 storyData 제거하고 바로 반환
+    const data = storySnapshot.data();
+    let content = data.content;
+    // 레거시 string content면 자동 마이그레이션
+    if (typeof content === 'string') {
+      try {
+        const parsed = JSON.parse(content);
+        if (parsed && parsed.chapters) {
+          content = parsed;
+        } else {
+          // string이지만 chapters 구조가 아님(진짜 레거시)
+          content = {
+            chapters: [
+              {
+                id: 'chapter-1',
+                title: data.title || '1장',
+                sections: [
+                  {
+                    id: 'section-1',
+                    title: '시작',
+                    content: [
+                      { type: 'paragraph', children: [{ text: content }] }
+                    ]
+                  }
+                ]
+              }
+            ]
+          };
+        }
+      } catch {
+        // 파싱 불가한 string이면 1개 챕터/섹션으로 변환
+        content = {
+          chapters: [
+            {
+              id: 'chapter-1',
+              title: data.title || '1장',
+              sections: [
+                {
+                  id: 'section-1',
+                  title: '시작',
+                  content: [
+                    { type: 'paragraph', children: [{ text: data.content }] }
+                  ]
+                }
+              ]
+            }
+          ]
+        };
+      }
+    }
+    // 이미 chapters 구조면 그대로 반환
     return {
       id: storySnapshot.id,
-      ...storySnapshot.data()
+      ...data,
+      content
     } as Story;
   } catch (error) {
     console.error("Error getting story:", error);
@@ -1298,11 +1345,12 @@ export const isPromotionSubscribed = async (userId: string): Promise<boolean> =>
 };
 
 // 스토리 업데이트 함수
-export const updateStory = async (storyId: string, updateData: Partial<Story>): Promise<boolean> => {
+export const updateStory = async (storyId: string, updateData: Partial<Story> | { content: object }): Promise<boolean> => {
   try {
     const storyRef = doc(db, 'stories', storyId);
     await updateDoc(storyRef, {
       ...updateData,
+      content: typeof updateData.content === 'string' ? updateData.content : JSON.stringify(updateData.content),
       updatedAt: Date.now()
     });
     console.log(`스토리 업데이트 완료: ${storyId}`);
@@ -1522,5 +1570,33 @@ export const toggleReaction = async (userId: string, storyId: string, reaction: 
   } catch (error) {
     console.error('toggleReaction 오류:', error);
     throw error;
+  }
+};
+
+// 인기 자서전 가져오기 (조회수, 좋아요, 댓글, 스크랩 순)
+export const getPopularStories = async (
+  limit = 5,
+  sortBy: 'viewCount' | 'reactionCount' | 'commentCount' | 'bookmarkCount' = 'viewCount'
+): Promise<Story[]> => {
+  try {
+    const storiesRef = collection(db, "stories");
+    const q = query(
+      storiesRef,
+      where("isPublic", "==", true),
+      orderBy(sortBy, "desc"),
+      firestoreLimit(limit)
+    );
+    const querySnapshot = await getDocs(q);
+    const stories: Story[] = [];
+    querySnapshot.forEach((doc) => {
+      stories.push({
+        ...doc.data() as Story,
+        id: doc.id,
+      });
+    });
+    return stories;
+  } catch (error) {
+    console.error("Error getting popular stories:", error);
+    return [];
   }
 }; 

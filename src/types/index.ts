@@ -1,3 +1,5 @@
+import { Descendant } from 'slate';
+
 export interface Question {
   id: string;
   text: string;
@@ -14,7 +16,7 @@ export interface Story {
   userId: string;
   storyNumber?: number; // 사용자별 스토리 번호
   title: string;
-  content: string;
+  content: Descendant[] | { chapters: StoryChapter[], [key: string]: unknown }; // Plate(RichText) JSON 구조, 마이그레이션 호환
   createdAt: number;
   isPreview: boolean;
   isPaid: boolean;
@@ -87,7 +89,7 @@ export enum AuthProvider {
 export interface StorySection {
   id: string;
   title: string;
-  content: string;
+  content: Descendant[]; // Plate(RichText) JSON 구조
 }
 
 export interface StoryChapter {

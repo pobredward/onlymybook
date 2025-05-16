@@ -1,3 +1,5 @@
+import { Descendant } from 'slate';
+
 export interface Chapter {
   id: string;
   title: string;
@@ -7,7 +9,7 @@ export interface Chapter {
 export interface Section {
   id: string;
   title: string;
-  content: string;
+  content: Descendant[]; // Plate(RichText) JSON 구조
 }
 
 export interface DraggableItem {

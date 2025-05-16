@@ -6,9 +6,10 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useAuth } from '@/contexts/AuthContext';
-import { getPublicStories, getRandomStories, bookmarkStory, getStoriesByTag } from '@/lib/db';
+import { getPublicStories, bookmarkStory, getStoriesByTag, getPopularStories } from '@/lib/db';
 import { Story, User } from '@/types';
 import { StoryDetail } from './StoryDetail';
+import { collection, query, where, orderBy, limit as firestoreLimit, startAfter, getDocs, getFirestore, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
 
 // 자서전 감성 태그 목록
 const EMOTION_TAGS = [
@@ -25,12 +26,18 @@ const EMOTION_TAGS = [
   { id: 'reflection', name: '성찰', icon: '🧘' }
 ];
 
+const POPULAR_TABS = [
+  { key: 'viewCount', label: '조회수' },
+  { key: 'reactionCount', label: '좋아요' },
+  { key: 'commentCount', label: '댓글' },
+  { key: 'bookmarkCount', label: '스크랩' },
+];
+
 // 서재 페이지
 export default function LibraryPage() {
   const router = useRouter();
   const { currentUser, userData, loading: authLoading } = useAuth();
   const [stories, setStories] = useState<Story[]>([]);
-  const [recommendedStories, setRecommendedStories] = useState<Story[]>([]);
   const [bookmarkedStories, setBookmarkedStories] = useState<Story[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,6 +48,11 @@ export default function LibraryPage() {
   const [searchResults, setSearchResults] = useState<Story[]>([]);
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const [showScrollTop, setShowScrollTop] = useState<boolean>(false);
+  const [popularStories, setPopularStories] = useState<Story[]>([]);
+  const [popularTab, setPopularTab] = useState<'viewCount' | 'reactionCount' | 'commentCount' | 'bookmarkCount'>('viewCount');
+  const [lastStoryDoc, setLastStoryDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [hasMoreStories, setHasMoreStories] = useState(true);
+  const STORIES_PAGE_SIZE = 20;
 
   // 스크롤 위치 감지
   useEffect(() => {
@@ -61,50 +73,61 @@ export default function LibraryPage() {
     });
   };
 
-  // 자서전 목록 불러오기
+  // 자서전 목록 불러오기 (최신/태그별, 페이지네이션)
+  const fetchStories = async (reset = false) => {
+    setLoading(true);
+    try {
+      const db = getFirestore();
+      let q;
+      if (selectedTag === 'all') {
+        q = query(
+          collection(db, 'stories'),
+          where('isPublic', '==', true),
+          orderBy('createdAt', 'desc'),
+          ...(reset ? [] : lastStoryDoc ? [startAfter(lastStoryDoc)] : []),
+          firestoreLimit(STORIES_PAGE_SIZE)
+        );
+      } else {
+        q = query(
+          collection(db, 'stories'),
+          where('tags', 'array-contains', selectedTag),
+          where('isPublic', '==', true),
+          orderBy('createdAt', 'desc'),
+          ...(reset ? [] : lastStoryDoc ? [startAfter(lastStoryDoc)] : []),
+          firestoreLimit(STORIES_PAGE_SIZE)
+        );
+      }
+      const querySnapshot = await getDocs(q);
+      const newStories: Story[] = [];
+      querySnapshot.forEach(doc => {
+        newStories.push({ ...doc.data(), id: doc.id } as Story);
+      });
+      if (reset) {
+        setStories(newStories);
+      } else {
+        setStories(prev => [...prev, ...newStories]);
+      }
+      setLastStoryDoc(querySnapshot.docs[querySnapshot.docs.length - 1] || null);
+      setHasMoreStories(querySnapshot.size === STORIES_PAGE_SIZE);
+    } catch (err) {
+      setError('자서전을 불러오는 중 오류가 발생했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 인기 자서전 불러오기 (탭 변경 시)
   useEffect(() => {
-    const fetchStories = async () => {
-      setLoading(true);
+    const fetchPopularStories = async () => {
       try {
-        let fetchedStories;
-        
-        if (selectedTag === 'all') {
-          fetchedStories = await getPublicStories();
-        } else {
-          fetchedStories = await getStoriesByTag(selectedTag);
-        }
-        
-        setStories(fetchedStories);
-        
-        // 추천 자서전 (랜덤 3개)
-        const recommended = await getRandomStories(3);
-        setRecommendedStories(recommended);
-        
-        // 로그인한 경우 사용자 정보 및 북마크 가져오기
-        if (currentUser && userData) {
-          setCurrentUserData(userData);
-          
-          // 북마크한 자서전 가져오기
-          if (userData.bookmarks?.length) {
-            const bookmarkedIds = userData.bookmarks;
-            const bookmarked = fetchedStories.filter(story => 
-              bookmarkedIds.includes(story.id)
-            );
-            setBookmarkedStories(bookmarked);
-          }
-        }
+        const popular = await getPopularStories(5, popularTab);
+        setPopularStories(popular);
       } catch (err) {
-        console.error('Error fetching stories:', err);
-        setError('자서전을 불러오는 중 오류가 발생했습니다.');
-      } finally {
-        setLoading(false);
+        console.error('Error fetching popular stories:', err);
       }
     };
-
-    if (!authLoading) {
-      fetchStories();
-    }
-  }, [authLoading, currentUser, userData, selectedTag]);
+    fetchPopularStories();
+  }, [popularTab]);
 
   // 북마크 토글
   const toggleBookmark = async (storyId: string) => {
@@ -148,7 +171,7 @@ export default function LibraryPage() {
   };
 
   // 자서전 카드 컴포넌트
-  const StoryCard = ({ story }: { story: Story }) => {
+  const StoryCard = ({ story, rank }: { story: Story, rank?: number }) => {
     // 서사 톤을 기반으로 색상 결정
     const getToneColor = (tone?: string) => {
       const toneColors: Record<string, string> = {
@@ -198,101 +221,43 @@ export default function LibraryPage() {
 
     return (
       <div 
-        className={`relative rounded-lg overflow-hidden shadow-md hover:shadow-xl transition-all 
-          border-2 ${getToneColor(story.tone)} cursor-pointer transform hover:-translate-y-1 hover:scale-[1.01] transition-transform`}
+        className={`relative rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-all border bg-white border-gray-100 cursor-pointer min-h-[90px] px-4 py-3 flex flex-col justify-between`}
         onClick={() => openStoryDetail(story)}
+        style={{ minHeight: 0 }}
       >
-        {/* 메인 타이틀 영역 */}
-        <div className="p-4">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-xl font-bold text-gray-800">{story.title || '제목 없음'}</h3>
-            {story.createdAt && (
-              <span className="text-xs text-gray-500">{formatDate(story.createdAt)}</span>
+        {/* 상단: n위 뱃지 + 제목 + 날짜 */}
+        <div className="flex items-start justify-between gap-2 w-full">
+          {/* n위 뱃지 + 제목 */}
+          <div className="flex items-center flex-wrap min-w-0 gap-2 flex-1">
+            {typeof rank === 'number' && (
+              <span className="inline-block bg-yellow-400 text-white text-xs font-bold px-2 py-0.5 rounded-full shadow-md whitespace-nowrap mr-1" style={{ fontSize: '0.95rem', minWidth: '2.5rem', textAlign: 'center' }}>
+                {rank + 1}위
+              </span>
             )}
+            <span className="text-base font-bold text-gray-800 truncate min-w-0 max-w-full" style={{ lineHeight: 1.3 }}>{story.title || '제목 없음'}</span>
           </div>
-          
-          <p className="text-sm text-gray-600 mb-3">{getSummary(story.content)}</p>
-          
-          {/* 태그와 통계 */}
-          <div className="flex flex-wrap mb-2 gap-1">
-            {story.tags?.map(tag => {
-              const tagInfo = EMOTION_TAGS.find(t => t.id === tag);
-              return (
-                <span 
-                  key={tag} 
-                  className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-white bg-opacity-60"
-                >
-                  {tagInfo?.icon} {tagInfo?.name}
-                </span>
-              );
-            })}
-          </div>
-          
-          {/* 메타 정보 */}
-          <div className="flex items-center justify-between text-xs text-gray-500 mt-auto pt-2 border-t border-gray-100">
-            <div className="flex items-center space-x-3">
-              {/* 조회수 */}
-              <span className="flex items-center">
-                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                </svg>
-                {story.viewCount || 0}
-              </span>
-              {/* 좋아요 */}
-              <span className="flex items-center">
-                <svg className="w-4 h-4 mr-1 text-pink-400" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                  <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd"></path>
-                </svg>
-                {story.reactionCount || 0}
-              </span>
-              {/* 댓글 수 */}
-              <span className="flex items-center">
-                <svg className="w-4 h-4 mr-1 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8h2a2 2 0 012 2v8a2 2 0 01-2 2H7a2 2 0 01-2-2V10a2 2 0 012-2h2"></path>
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 3h-6a2 2 0 00-2 2v2a2 2 0 002 2h6a2 2 0 002-2V5a2 2 0 00-2-2z"></path>
-                </svg>
-                {story.commentCount || 0}
-              </span>
-              {/* 스크랩(북마크) 수 */}
-              <span className="flex items-center">
-                <svg className="w-4 h-4 mr-1 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-5-7 5V5z" />
-                </svg>
-                {story.bookmarkCount || 0}
-              </span>
-            </div>
-            {/* 읽기 시간 */}
-            <span className="flex items-center">
-              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-              </svg>
-              {calculateReadingTime(story.content)}분
-            </span>
-          </div>
-        </div>
-        
-        {/* 북마크 버튼 */}
-        <button 
-          className={`absolute top-2 right-2 p-1 rounded-full bg-white bg-opacity-80 hover:bg-opacity-100 
-            transition-transform ${storyIsBookmarked ? 'scale-110' : 'scale-100'}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            toggleBookmark(story.id);
-          }}
-          aria-label={storyIsBookmarked ? '북마크 해제' : '북마크 추가'}
-          title={storyIsBookmarked ? '북마크 해제' : '북마크 추가'}
-        >
-          {storyIsBookmarked ? (
-            <svg className="w-5 h-5 text-red-500 animate-pulse" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-              <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd"></path>
-            </svg>
-          ) : (
-            <svg className="w-5 h-5 text-gray-400 hover:text-red-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path>
-            </svg>
+          {/* 날짜 */}
+          {story.createdAt && (
+            <span className="text-xs text-gray-400 ml-2 whitespace-nowrap flex-shrink-0">{formatDate(story.createdAt)}</span>
           )}
-        </button>
+        </div>
+        {/* 작성자 */}
+        <div className="text-xs text-gray-500 mb-1 mt-1">by {story.authorName || '익명'}</div>
+        {/* 통계 */}
+        <div className="flex items-center justify-between mt-2">
+          <div className="flex items-center space-x-2 text-xs text-gray-500">
+            {/* 조회수 */}
+            <span className="flex items-center"><svg className="w-4 h-4 mr-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>{story.viewCount || 0}</span>
+            {/* 좋아요 */}
+            <span className="flex items-center"><svg className="w-4 h-4 mr-0.5 text-pink-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd"></path></svg>{story.reactionCount || 0}</span>
+            {/* 댓글 수 */}
+            <span className="flex items-center"><svg className="w-4 h-4 mr-0.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8h2a2 2 0 012 2v8a2 2 0 01-2 2H7a2 2 0 01-2-2V10a2 2 0 012-2h2"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 3h-6a2 2 0 00-2 2v2a2 2 0 002 2h6a2 2 0 002-2V5a2 2 0 00-2-2z"/></svg>{story.commentCount || 0}</span>
+            {/* 스크랩(북마크) 수 */}
+            <span className="flex items-center"><svg className="w-4 h-4 mr-0.5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-5-7 5V5z" /></svg>{story.bookmarkCount || 0}</span>
+          </div>
+          {/* 읽기 시간 */}
+          <span className="flex items-center text-xs text-gray-400 ml-2"><svg className="w-4 h-4 mr-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>{calculateReadingTime(story.content)}분</span>
+        </div>
       </div>
     );
   };
@@ -363,104 +328,221 @@ export default function LibraryPage() {
     setIsSearching(false);
   };
 
+  // 태그/필터 변경 시 초기화
+  useEffect(() => {
+    setLastStoryDoc(null);
+    setHasMoreStories(true);
+    fetchStories(true);
+  }, [selectedTag]);
+
+  // 더 보기 버튼 클릭
+  const handleLoadMore = () => {
+    fetchStories(false);
+  };
+
   return (
     <MainLayout
       title="디지털 자서전 서재"
       description="다양한 사람들의 삶의 이야기를 만나보세요."
     >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        {/* 서재 소개 */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-extrabold text-gray-900 sm:text-4xl mb-2">
-            이야기 서재
-          </h1>
-          <p className="text-lg text-gray-500 max-w-2xl mx-auto">
-            한 권 한 권의 자서전 속에는 사람들의 삶의 조각들이 담겨 있습니다. 
-            다양한 이야기를 통해 공감과 위로를 느껴보세요.
-          </p>
-        </div>
+      <div className="max-w-7xl mx-auto px-2 sm:px-6 lg:px-8 py-10">
+        <div className="space-y-5">
+          {/* 서재 소개 */}
+          {/* <section className="bg-white shadow-sm rounded-2xl px-4 sm:px-8 py-8 text-center">
+            <hr className="my-4 border-gray-200 max-w-xs mx-auto" />
+            <p className="text-lg text-gray-500 max-w-2xl mx-auto">
+              한 권 한 권의 자서전 속에는 사람들의 삶의 조각들이 담겨 있습니다.
+              다양한 이야기를 통해 공감과 위로를 느껴보세요.
+            </p>
+          </section> */}
 
-        {/* 검색 바 */}
-        <div className="mb-8">
-          <form onSubmit={handleSearch} className="flex items-center max-w-lg mx-auto">
-            <div className="relative w-full">
-              <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-10 p-2.5"
-                placeholder="제목이나 내용 검색..."
-              />
-              {searchQuery && (
+          {/* 인기 자서전 */}
+          <section className="px-4 sm:px-8 py-8">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-2xl">🔥</span>
+              <h2 className="text-2xl font-bold text-indigo-700">인기 자서전 TOP 5</h2>
+            </div>
+            <hr className="mb-6 border-indigo-200" />
+            {/* <p className="text-base sm:text-lg text-gray-600 max-w-xl mx-auto mb-6 text-center">
+              사람들이 가장 많이 읽고, 공감한 자서전입니다.<br />
+              <span className="font-semibold text-indigo-500">{POPULAR_TABS.find(t=>t.key===popularTab)?.label}</span> 기준으로 선정!
+            </p> */}
+            {/* 탭 UI */}
+            <div className="flex justify-center gap-2 mb-6 overflow-x-auto scrollbar-hide">
+              {POPULAR_TABS.map(tab => (
                 <button
-                  type="button"
-                  onClick={resetSearch}
-                  className="absolute inset-y-0 right-0 flex items-center pr-3"
+                  key={tab.key}
+                  className={`px-4 py-2 rounded-full text-sm font-semibold transition-all whitespace-nowrap
+                    ${popularTab === tab.key ? 'bg-indigo-600 text-white shadow-md scale-105' : 'bg-gray-100 text-gray-800 hover:bg-gray-200 hover:scale-102'}`}
+                  onClick={() => setPopularTab(tab.key as any)}
                 >
-                  <svg className="w-4 h-4 text-gray-400 hover:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  {tab.label}
                 </button>
-              )}
+              ))}
             </div>
-            <button
-              type="submit"
-              className="inline-flex items-center py-2.5 px-3 ml-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 focus:ring-4 focus:outline-none focus:ring-indigo-300"
-            >
-              검색
-            </button>
-          </form>
-        </div>
+            {/* 카드 리스트 (모바일: 가로 스크롤, 데스크탑: 그리드) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-7 md:grid-cols-5 overflow-x-auto md:overflow-x-visible md:flex-wrap flex-nowrap md:grid md:flex-none flex md:block snap-x md:snap-none">
+              {popularStories.map((story, index) => (
+                <div
+                  key={story.id}
+                  className="relative group min-w-[85vw] max-w-xs sm:min-w-0 sm:max-w-none md:min-w-0 md:max-w-none snap-center opacity-0 animate-fade-in-up"
+                  style={{ animationDelay: `${index * 0.08}s` }}
+                >
+                  <StoryCard story={story} rank={index} />
+                </div>
+              ))}
+            </div>
+          </section>
 
-        {/* 태그 필터 */}
-        <div className="mb-8">
-          <div className="flex flex-wrap gap-2 justify-center">
-            {EMOTION_TAGS.map((tag) => (
-              <button
-                key={tag.id}
-                className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-medium transition-all
-                  ${selectedTag === tag.id 
-                    ? 'bg-indigo-600 text-white shadow-md scale-105' 
-                    : 'bg-gray-100 text-gray-800 hover:bg-gray-200 hover:scale-102'}`}
-                onClick={() => {
-                  setSelectedTag(tag.id);
-                  resetSearch(); // 태그 선택 시 검색 초기화
-                }}
-              >
-                <span className="mr-1">{tag.icon}</span>
-                {tag.name}
-                {selectedTag === tag.id && (
-                  <span className="ml-1 flex h-2 w-2 relative">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
-                  </span>
+          {/* 최신 자서전 */}
+          <section className="px-4 sm:px-8 py-8">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-2xl">🆕</span>
+              <h2 className="text-2xl font-bold text-gray-800">최신 자서전</h2>
+            </div>
+            <hr className="mb-6 border-gray-200" />
+            {/* 태그 필터 */}
+            <div className="flex flex-wrap gap-2 justify-center mb-4 overflow-x-auto scrollbar-hide pb-2">
+              {EMOTION_TAGS.map((tag) => (
+                <button
+                  key={tag.id}
+                  className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap
+                    ${selectedTag === tag.id 
+                      ? 'bg-indigo-600 text-white shadow-md scale-105' 
+                      : 'bg-gray-100 text-gray-800 hover:bg-gray-200 hover:scale-102'}`}
+                  onClick={() => {
+                    setSelectedTag(tag.id);
+                    resetSearch(); // 태그 선택 시 검색 초기화
+                  }}
+                >
+                  <span className="mr-1">{tag.icon}</span>
+                  {tag.name}
+                  {selectedTag === tag.id && (
+                    <span className="ml-1 flex h-2 w-2 relative">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+            {/* 검색 바 */}
+            <div className="mb-8">
+              <form onSubmit={handleSearch} className="flex items-center max-w-lg mx-auto">
+                <div className="relative w-full">
+                  <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </div>
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-10 p-2.5"
+                    placeholder="제목이나 내용 검색..."
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={resetSearch}
+                      className="absolute inset-y-0 right-0 flex items-center pr-3"
+                    >
+                      <svg className="w-4 h-4 text-gray-400 hover:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+                <button
+                  type="submit"
+                  className="inline-flex items-center py-2.5 px-3 ml-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 focus:ring-4 focus:outline-none focus:ring-indigo-300"
+                >
+                  검색
+                </button>
+              </form>
+            </div>
+            {/* 최신 자서전 리스트 */}
+            {isSearching && (
+              <div className="mb-10">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-semibold text-gray-800">검색 결과</h2>
+                  <span className="text-sm text-gray-500">{searchResults.length}개의 자서전 발견</span>
+                </div>
+                {searchResults.length === 0 ? (
+                  <EmptyState 
+                    message="검색 결과가 없습니다" 
+                    subMessage="다른 검색어로 다시 시도해보세요." 
+                  />
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {searchResults.map((story, index) => (
+                      <div
+                        key={story.id}
+                        className="opacity-0 animate-fade-in"
+                        style={{ animationDelay: `${index * 0.1}s` }}
+                      >
+                        <StoryCard story={story} />
+                      </div>
+                    ))}
+                  </div>
                 )}
-              </button>
-            ))}
-          </div>
-        </div>
+              </div>
+            )}
+            {!isSearching && (
+              <div>
+                {/* 최신 자서전 리스트 */}
+                {loading ? (
+                  <div className="flex justify-center py-10">
+                    <LoadingSpinner size="lg" text="자서전을 불러오는 중입니다..." />
+                  </div>
+                ) : error ? (
+                  <div className="text-center py-10">
+                    <p className="text-red-500">{error}</p>
+                    <Button
+                      className="mt-4"
+                      onClick={() => window.location.reload()}
+                    >
+                      다시 시도하기
+                    </Button>
+                  </div>
+                ) : stories.length === 0 ? (
+                  <EmptyState 
+                    message="등록된 자서전이 없습니다" 
+                    subMessage="곧 새로운 자서전이 등록될 예정입니다. 직접 자서전을 작성해보세요." 
+                  />
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {stories.map((story, index) => (
+                        <div
+                          key={story.id}
+                          className="opacity-0 animate-fade-in-up"
+                          style={{ animationDelay: `${index * 0.1}s` }}
+                        >
+                          <StoryCard story={story} />
+                        </div>
+                      ))}
+                    </div>
+                    {hasMoreStories && (
+                      <div className="flex justify-center mt-8">
+                        <Button onClick={handleLoadMore} variant="outline" disabled={loading}>
+                          {loading ? '불러오는 중...' : '더 보기'}
+                        </Button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </section>
 
-        {/* 검색 결과 */}
-        {isSearching && (
-          <div className="mb-10">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-gray-800">검색 결과</h2>
-              <span className="text-sm text-gray-500">{searchResults.length}개의 자서전 발견</span>
-            </div>
-            
-            {searchResults.length === 0 ? (
-              <EmptyState 
-                message="검색 결과가 없습니다" 
-                subMessage="다른 검색어로 다시 시도해보세요." 
-              />
-            ) : (
+          {/* 북마크한 자서전 섹션 (로그인 시) */}
+          {currentUserData && bookmarkedStories.length > 0 && (
+            <section className="bg-white shadow-md rounded-2xl px-4 sm:px-8 py-8 mt-8">
+              <h2 className="text-xl font-semibold text-gray-800 mb-4">내가 찜한 자서전</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {searchResults.map((story, index) => (
+                {bookmarkedStories.map((story, index) => (
                   <div
                     key={story.id}
                     className="opacity-0 animate-fade-in"
@@ -470,87 +552,9 @@ export default function LibraryPage() {
                   </div>
                 ))}
               </div>
-            )}
-          </div>
-        )}
-
-        {/* 메인 자서전 목록 */}
-        {!isSearching && (
-          <div className="mb-10">
-            <h2 className="text-xl font-semibold text-gray-800 mb-4">
-              {selectedTag === 'all' ? '최신 자서전' : `${EMOTION_TAGS.find(tag => tag.id === selectedTag)?.name} 자서전`}
-            </h2>
-            
-            {loading ? (
-              <div className="flex justify-center py-10">
-                <LoadingSpinner size="lg" text="자서전을 불러오는 중입니다..." />
-              </div>
-            ) : error ? (
-              <div className="text-center py-10">
-                <p className="text-red-500">{error}</p>
-                <Button
-                  className="mt-4"
-                  onClick={() => window.location.reload()}
-                >
-                  다시 시도하기
-                </Button>
-              </div>
-            ) : stories.length === 0 ? (
-              <EmptyState 
-                message="등록된 자서전이 없습니다" 
-                subMessage="곧 새로운 자서전이 등록될 예정입니다. 직접 자서전을 작성해보세요." 
-              />
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {stories.map((story, index) => (
-                  <div
-                    key={story.id}
-                    className="opacity-0 animate-fade-in-up"
-                    style={{ animationDelay: `${index * 0.1}s` }}
-                  >
-                    <StoryCard story={story} />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-        
-        {/* 북마크한 자서전 섹션 (로그인 시) */}
-        {currentUserData && bookmarkedStories.length > 0 && (
-          <div className="mt-12">
-            <h2 className="text-xl font-semibold text-gray-800 mb-4">내가 찜한 자서전</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {bookmarkedStories.map((story, index) => (
-                <div
-                  key={story.id}
-                  className="opacity-0 animate-fade-in"
-                  style={{ animationDelay: `${index * 0.1}s` }}
-                >
-                  <StoryCard story={story} />
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-        
-        {/* 추천 자서전 섹션 */}
-        {!isSearching && recommendedStories.length > 0 && (
-          <div className="mt-12">
-            <h2 className="text-xl font-semibold text-gray-800 mb-4">이런 자서전은 어떨까요?</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {recommendedStories.map((story, index) => (
-                <div
-                  key={story.id}
-                  className="opacity-0 animate-fade-in"
-                  style={{ animationDelay: `${index * 0.1}s` }}
-                >
-                  <StoryCard story={story} />
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+            </section>
+          )}
+        </div>
 
         {/* 선택된 자서전 상세 모달 */}
         {selectedStory && (
@@ -561,7 +565,6 @@ export default function LibraryPage() {
             isBookmarked={isBookmarked(selectedStory.id)}
           />
         )}
-        
         {/* 맨 위로 스크롤 버튼 */}
         {showScrollTop && (
           <button

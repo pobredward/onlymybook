@@ -62,7 +62,7 @@ export default function MyBookPage() {
   }
 
   return (
-    <MainLayout title="나의 책장 - 디지털 자서전" description="내가 작성한 자서전과 북마크한 자서전을 관리합니다.">
+    <MainLayout title="나의 자서전 - 디지털 자서전" description="내가 작성한 자서전과 북마크한 자서전을 관리합니다.">
       <div className="container mx-auto px-4 py-10">
         <h1 className="text-3xl font-bold mb-8">나만의 책장</h1>
         

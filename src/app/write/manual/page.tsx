@@ -14,7 +14,8 @@ import { ChevronDown, ChevronUp, Plus, Trash2, Save, Globe, Tag } from 'lucide-r
 import { v4 as uuidv4 } from 'uuid';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
-import { saveFullStory, getOrCreateUser } from '@/lib/db';
+import { saveFullStory, getOrCreateUser, updateStory } from '@/lib/db';
+import { Descendant } from 'slate';
 
 // 태그 목록 정의
 const AVAILABLE_TAGS = [
@@ -30,6 +31,23 @@ const AVAILABLE_TAGS = [
   { id: 'reflection', emoji: '🧘', name: '성찰' }
 ];
 
+// undefined 값 깊게 제거 유틸 함수 (배열 내부 undefined도 제거)
+function removeUndefinedDeep<T>(obj: T): T {
+  if (Array.isArray(obj)) {
+    return obj
+      .map(removeUndefinedDeep)
+      .filter((v) => v !== undefined) as unknown as T;
+  } else if (obj && typeof obj === 'object') {
+    return Object.entries(obj).reduce((acc, [key, value]) => {
+      if (value !== undefined) {
+        (acc as Record<string, unknown>)[key] = removeUndefinedDeep(value);
+      }
+      return acc;
+    }, {} as T);
+  }
+  return obj;
+}
+
 export default function ManualWritePage() {
   const router = useRouter();
   const { currentUser } = useAuth();
@@ -40,13 +58,14 @@ export default function ManualWritePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [isPublic, setIsPublic] = useState(false);
+  const [description, setDescription] = useState('');
   
   useEffect(() => {
     // 개인 정보 불러오기 (이름 등)
     const personalInfoJson = localStorage.getItem('autobiography_personal_info');
     if (personalInfoJson) {
       try {
-        const personalInfo = JSON.parse(personalInfoJson);
+        const personalInfo: { latestStoryId?: string; name?: string } = JSON.parse(personalInfoJson);
         if (personalInfo.name) {
           setAuthorName(personalInfo.name);
         }
@@ -62,6 +81,9 @@ export default function ManualWritePage() {
         const savedContent = JSON.parse(savedContentJson);
         if (savedContent.title) {
           setTitle(savedContent.title);
+        }
+        if (savedContent.description) {
+          setDescription(savedContent.description);
         }
         
         // 기존 방식의 단일 content가 있으면 첫 번째 챕터로 변환
@@ -111,7 +133,7 @@ export default function ManualWritePage() {
       sections: [{
         id: sectionId,
         title: '시작',
-        content,
+        content: [{ type: 'paragraph', children: [{ text: content }] }] as unknown as Descendant[],
       }]
     };
     
@@ -130,7 +152,7 @@ export default function ManualWritePage() {
       sections: [{
         id: sectionId,
         title: '시작',
-        content: '',
+        content: [{ type: 'paragraph', children: [{ text: '' }] }] as unknown as Descendant[],
       }]
     };
     
@@ -144,6 +166,7 @@ export default function ManualWritePage() {
       if (title && chapters.length > 0) {
         localStorage.setItem('autobiography_manual_content', JSON.stringify({
           title,
+          description,
           chapters,
           authorName,
           tags: selectedTags,
@@ -154,7 +177,7 @@ export default function ManualWritePage() {
     }, 1000);
     
     return () => clearTimeout(saveTimeout);
-  }, [title, chapters, authorName, selectedTags, isPublic]);
+  }, [title, description, chapters, authorName, selectedTags, isPublic]);
 
   // 태그 토글
   const handleTagToggle = (tagId: string) => {
@@ -186,7 +209,7 @@ export default function ManualWritePage() {
       sections: [{
         id: `${newChapterId}-section-${uuidv4()}`,
         title: '새 섹션',
-        content: '',
+        content: [{ type: 'paragraph', children: [{ text: '' }] }] as unknown as Descendant[],
       }]
     };
     
@@ -246,7 +269,7 @@ export default function ManualWritePage() {
   };
   
   // 섹션 내용 변경
-  const handleSectionContentChange = (chapterId: string, sectionId: string, newContent: string) => {
+  const handleSectionContentChange = (chapterId: string, sectionId: string, newContent: Descendant[]) => {
     setChapters(prev => 
       prev.map(chapter => {
         if (chapter.id === chapterId) {
@@ -278,7 +301,7 @@ export default function ManualWritePage() {
               {
                 id: newSectionId,
                 title: '새 섹션',
-                content: ''
+                content: [{ type: 'paragraph', children: [{ text: '' }] }] as unknown as Descendant[]
               }
             ]
           };
@@ -354,7 +377,60 @@ export default function ManualWritePage() {
     );
   };
 
-  const handleSaveAndComplete = async () => {
+  // 임시 저장
+  const handleTempSave = async () => {
+    try {
+      setIsSaving(true);
+      let userId = currentUser?.uid;
+      if (!userId) {
+        userId = await getOrCreateUser();
+      }
+      // localStorage에서 latestStoryId 확인
+      let latestStoryId = '';
+      if (typeof window !== 'undefined') {
+        const personalInfoJson = localStorage.getItem('autobiography_personal_info');
+        if (personalInfoJson) {
+          try {
+            const personalInfo: { latestStoryId?: string; name?: string } = JSON.parse(personalInfoJson);
+            latestStoryId = personalInfo.latestStoryId || '';
+          } catch {}
+        }
+      }
+      const storyData = {
+        chapters,
+        title,
+        description,
+        authorName,
+        tags: selectedTags,
+        isPublic
+      };
+      const cleanedStoryData = removeUndefinedDeep(storyData);
+      if (latestStoryId) {
+        // 기존 임시 스토리 업데이트
+        await updateStory(latestStoryId, { content: cleanedStoryData });
+        toast.success('임시 저장이 완료되었습니다.');
+      } else {
+        // 새로 생성
+        const { storyId, userId: savedUserId, storyNumber } = await saveFullStory(userId, cleanedStoryData);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('autobiography_personal_info', JSON.stringify({
+            userId: savedUserId,
+            latestStoryId: storyId,
+            storyNumber
+          }));
+        }
+        toast.success('임시 저장이 완료되었습니다.');
+      }
+    } catch (e) {
+      console.error('임시 저장 오류:', e);
+      toast.error('임시 저장 중 오류가 발생했습니다.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // 작성하기(저장 + 공유 단계 이동)
+  const handleWriteAndShare = async () => {
     try {
       setIsSaving(true);
       if (!title.trim()) {
@@ -362,11 +438,15 @@ export default function ManualWritePage() {
         setIsSaving(false);
         return;
       }
-      // 저장된 내용이 있는지 검사
+      if (!description.trim()) {
+        toast.error('한줄 설명을 입력해주세요.');
+        setIsSaving(false);
+        return;
+      }
       let hasContent = false;
       for (const chapter of chapters) {
         for (const section of chapter.sections) {
-          if (section.content.trim()) {
+          if (section.content.length > 0) {
             hasContent = true;
             break;
           }
@@ -378,39 +458,28 @@ export default function ManualWritePage() {
         setIsSaving(false);
         return;
       }
-      // 챕터/섹션을 마크다운 content로 변환
-      let content = '';
-      chapters.forEach((chapter, chapterIndex) => {
-        content += `# ${chapter.title}\n\n`;
-        chapter.sections.forEach((section) => {
-          const skipTitles = ['시작', '새 섹션', '내용', ''];
-          if (section.title && !skipTitles.includes(section.title)) {
-            content += `## ${section.title}\n\n`;
-          }
-          if (section.content.trim()) {
-            content += `${section.content.trim()}\n\n`;
-          }
-        });
-        if (chapterIndex < chapters.length - 1) {
-          content += '\n';
-        }
-      });
-      content = content.replace(/\n{3,}/g, '\n\n');
-      // 사용자 ID 가져오기
       let userId = currentUser?.uid;
       if (!userId) {
         userId = await getOrCreateUser();
       }
-      // firebase에 저장
-      await saveFullStory(userId, content);
-      // 로컬에도 발행본 저장 (완료 페이지에서 사용)
+      const storyData = { chapters, title, description, authorName, tags: selectedTags, isPublic };
+      const cleanedStoryData = removeUndefinedDeep(storyData);
+      await saveFullStory(userId, cleanedStoryData).then(({ storyId, userId: savedUserId, storyNumber }) => {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('autobiography_personal_info', JSON.stringify({
+            userId: savedUserId,
+            latestStoryId: storyId,
+            storyNumber
+          }));
+        }
+      });
       localStorage.setItem('autobiography_manual_published', JSON.stringify({
         title,
+        description,
         authorName,
         tags: selectedTags,
       }));
-      // 완료 페이지로 이동
-      router.push('/write/manual/complete');
+      router.push('/write/complete');
     } catch (e) {
       console.error('저장 오류:', e);
       toast.error('저장 중 오류가 발생했습니다. 다시 시도해주세요.');
@@ -433,7 +502,7 @@ export default function ManualWritePage() {
               <Button
                 variant="primary"
                 size="sm"
-                onClick={handleSaveAndComplete}
+                onClick={handleTempSave}
                 disabled={isSaving}
                 className="flex items-center gap-1"
               >
@@ -445,7 +514,7 @@ export default function ManualWritePage() {
                 ) : (
                   <>
                     <Save size={16} />
-                    자서전 저장하기
+                    임시 저장
                   </>
                 )}
               </Button>
@@ -472,6 +541,19 @@ export default function ManualWritePage() {
                 onChange={(e) => setAuthorName(e.target.value)}
                 placeholder="저자명을 입력하세요"
                 className="mb-4"
+              />
+            </div>
+            
+            <div className="mt-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                한줄 설명 <span className="text-xs text-gray-400">(50자 이내)</span>
+              </label>
+              <Input
+                value={description}
+                onChange={(e) => setDescription(e.target.value.slice(0, 50))}
+                placeholder="이 자서전을 한 문장으로 소개해보세요"
+                className="mb-4"
+                maxLength={50}
               />
             </div>
             
@@ -660,10 +742,10 @@ export default function ManualWritePage() {
             ))}
           </div>
           
-          <div className="mt-8 flex justify-end">
+          <div className="mt-8 flex justify-end gap-4">
             <Button
-              variant="primary"
-              onClick={handleSaveAndComplete}
+              variant="secondary"
+              onClick={handleTempSave}
               disabled={isSaving}
             >
               {isSaving ? (
@@ -672,7 +754,21 @@ export default function ManualWritePage() {
                   <span className="ml-2">저장 중...</span>
                 </>
               ) : (
-                "자서전 저장하기"
+                '임시 저장'
+              )}
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleWriteAndShare}
+              disabled={isSaving}
+            >
+              {isSaving ? (
+                <>
+                  <LoadingSpinner size="sm" />
+                  <span className="ml-2">저장 중...</span>
+                </>
+              ) : (
+                '배포하기'
               )}
             </Button>
           </div>

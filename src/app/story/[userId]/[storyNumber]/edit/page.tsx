@@ -249,7 +249,27 @@ export default function EditStoryPage() {
         setIsPublic(storyData.isPublic || false);
         
         // 내용을 챕터와 섹션으로 분리
-        parseContent(storyData.content);
+        if (storyData.content) {
+          if (typeof storyData.content === 'string') {
+            try {
+              const parsed = JSON.parse(storyData.content);
+              if (parsed.chapters) {
+                setChapters(parsed.chapters);
+              } else {
+                parseContent(storyData.content); // 내부에서 setChapters 호출
+              }
+            } catch {
+              parseContent(storyData.content); // 내부에서 setChapters 호출
+            }
+          } else if (
+            typeof storyData.content === 'object' &&
+            storyData.content !== null &&
+            'chapters' in storyData.content &&
+            Array.isArray((storyData.content as { chapters: Chapter[] }).chapters)
+          ) {
+            setChapters((storyData.content as { chapters: Chapter[] }).chapters);
+          }
+        }
       } catch (err) {
         console.error('Error fetching story:', err);
         setError(err instanceof Error ? err.message : '자서전을 불러오는 중 오류가 발생했습니다.');
@@ -756,7 +776,7 @@ export default function EditStoryPage() {
       // DB에 저장
       await updateStory(story.id, {
         title,
-        content: content.trim(),
+        content: JSON.stringify({ chapters }), // richtext 구조로 저장
         authorName,
         endingTitle,
         endingMessage,

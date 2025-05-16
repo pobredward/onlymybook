@@ -1,12 +1,14 @@
 'use client';
 
-import React, { useRef } from 'react';
+import React, { useMemo } from 'react';
 import { useDrag, useDrop } from 'react-dnd';
 import { Input } from '@/components/ui/Input';
-import { TextArea } from '@/components/ui/TextArea';
 import { Button } from '@/components/ui/Button';
 import { GripVertical, Trash2 } from 'lucide-react';
 import { Section, DraggableItem } from '@/types/manual-editor';
+import { Descendant } from 'slate';
+import { createSlateEditor } from '@udecode/plate-core';
+import { Slate, Editable, withReact } from 'slate-react';
 
 interface DraggableSectionProps {
   section: Section;
@@ -14,7 +16,7 @@ interface DraggableSectionProps {
   index: number;
   moveSection: (chapterId: string, fromIndex: number, toIndex: number) => void;
   handleSectionTitleChange: (chapterId: string, sectionId: string, title: string) => void;
-  handleSectionContentChange: (chapterId: string, sectionId: string, content: string) => void;
+  handleSectionContentChange: (chapterId: string, sectionId: string, content: Descendant[]) => void;
   handleDeleteSection: (chapterId: string, sectionId: string) => void;
 }
 
@@ -27,7 +29,8 @@ export const DraggableSection: React.FC<DraggableSectionProps> = ({
   handleSectionContentChange,
   handleDeleteSection
 }) => {
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = React.useRef<HTMLDivElement>(null);
+  const editor = useMemo(() => withReact(createSlateEditor()), []);
   
   // 드래그 설정
   const [{ isDragging }, drag] = useDrag({
@@ -95,12 +98,16 @@ export const DraggableSection: React.FC<DraggableSectionProps> = ({
         </Button>
       </div>
       
-      <TextArea
-        value={section.content}
-        onChange={(e) => handleSectionContentChange(chapterId, section.id, e.target.value)}
-        placeholder="섹션 내용을 입력하세요..."
-        rows={6}
-      />
+      <Slate
+        editor={editor as any}
+        initialValue={section.content}
+        onChange={value => handleSectionContentChange(chapterId, section.id, value as Descendant[])}
+      >
+        <Editable
+          placeholder="섹션 내용을 입력하세요..."
+          className="border rounded px-2 py-2 min-h-[80px] bg-white"
+        />
+      </Slate>
     </div>
   );
 }; 
