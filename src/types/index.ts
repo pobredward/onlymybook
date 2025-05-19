@@ -28,6 +28,7 @@ export interface Story {
   bookmarkCount?: number;
   commentCount?: number;
   summary?: string;
+  description?: string; // 한 줄 소개
   tone?: string;
   keywords?: string[];
   readingTime?: number;

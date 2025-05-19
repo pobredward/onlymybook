@@ -6,10 +6,11 @@ import { MainLayout } from '@/components/layout/MainLayout';
 import { Button } from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useAuth } from '@/contexts/AuthContext';
-import { getPublicStories, bookmarkStory, getStoriesByTag, getPopularStories } from '@/lib/db';
+import { bookmarkStory, getPopularStories } from '@/lib/db';
 import { Story, User } from '@/types';
 import { StoryDetail } from './StoryDetail';
 import { collection, query, where, orderBy, limit as firestoreLimit, startAfter, getDocs, getFirestore, QueryDocumentSnapshot, DocumentData } from 'firebase/firestore';
+import { StoryCard } from '@/components/story/StoryCard';
 
 // 자서전 감성 태그 목록
 const EMOTION_TAGS = [
@@ -36,13 +37,13 @@ const POPULAR_TABS = [
 // 서재 페이지
 export default function LibraryPage() {
   const router = useRouter();
-  const { currentUser, userData, loading: authLoading } = useAuth();
+  const { loading: authLoading } = useAuth();
   const [stories, setStories] = useState<Story[]>([]);
   const [bookmarkedStories, setBookmarkedStories] = useState<Story[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedStory, setSelectedStory] = useState<Story | null>(null);
-  const [currentUserData, setCurrentUserData] = useState<User | null>(null);
+  const [currentUserData] = useState<User | null>(null);
   const [selectedTag, setSelectedTag] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [searchResults, setSearchResults] = useState<Story[]>([]);
@@ -83,7 +84,7 @@ export default function LibraryPage() {
         q = query(
           collection(db, 'stories'),
           where('isPublic', '==', true),
-          orderBy('createdAt', 'desc'),
+          // orderBy('createdAt', 'desc'),
           ...(reset ? [] : lastStoryDoc ? [startAfter(lastStoryDoc)] : []),
           firestoreLimit(STORIES_PAGE_SIZE)
         );
@@ -92,7 +93,7 @@ export default function LibraryPage() {
           collection(db, 'stories'),
           where('tags', 'array-contains', selectedTag),
           where('isPublic', '==', true),
-          orderBy('createdAt', 'desc'),
+          // orderBy('createdAt', 'desc'),
           ...(reset ? [] : lastStoryDoc ? [startAfter(lastStoryDoc)] : []),
           firestoreLimit(STORIES_PAGE_SIZE)
         );
@@ -100,7 +101,8 @@ export default function LibraryPage() {
       const querySnapshot = await getDocs(q);
       const newStories: Story[] = [];
       querySnapshot.forEach(doc => {
-        newStories.push({ ...doc.data(), id: doc.id } as Story);
+        const data = doc.data();
+        newStories.push({ ...data, id: doc.id } as Story);
       });
       if (reset) {
         setStories(newStories);
@@ -111,6 +113,7 @@ export default function LibraryPage() {
       setHasMoreStories(querySnapshot.size === STORIES_PAGE_SIZE);
     } catch (err) {
       setError('자서전을 불러오는 중 오류가 발생했습니다.');
+      console.error('Firestore 쿼리 에러:', err);
     } finally {
       setLoading(false);
     }
@@ -168,98 +171,6 @@ export default function LibraryPage() {
   // 상세 모달 열기
   const openStoryDetail = (story: Story) => {
     setSelectedStory(story);
-  };
-
-  // 자서전 카드 컴포넌트
-  const StoryCard = ({ story, rank }: { story: Story, rank?: number }) => {
-    // 서사 톤을 기반으로 색상 결정
-    const getToneColor = (tone?: string) => {
-      const toneColors: Record<string, string> = {
-        growth: 'bg-emerald-100 border-emerald-200',
-        challenge: 'bg-red-100 border-red-200',
-        love: 'bg-pink-100 border-pink-200',
-        family: 'bg-blue-100 border-blue-200',
-        loss: 'bg-purple-100 border-purple-200',
-        hope: 'bg-yellow-100 border-yellow-200',
-        healing: 'bg-green-100 border-green-200',
-        career: 'bg-gray-100 border-gray-200',
-        travel: 'bg-indigo-100 border-indigo-200',
-        reflection: 'bg-cyan-100 border-cyan-200',
-      };
-      
-      return tone && toneColors[tone] ? toneColors[tone] : 'bg-gray-100 border-gray-200';
-    };
-
-    // 카드 내용 요약
-    const getSummary = (content: string) => {
-      if (story.summary) return story.summary;
-      const maxLength = 100;
-      return content.length > maxLength 
-        ? content.substring(0, maxLength) + '...' 
-        : content;
-    };
-
-    // 북마크 상태 확인
-    const storyIsBookmarked = isBookmarked(story.id);
-
-    // 날짜 형식화
-    const formatDate = (timestamp: number) => {
-      const date = new Date(timestamp);
-      return date.toLocaleDateString('ko-KR', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-      });
-    };
-
-    // 읽기 예상 시간 계산
-    const calculateReadingTime = (content: string) => {
-      const wordsPerMinute = 200;
-      const wordCount = content.split(/\s+/).length;
-      return Math.ceil(wordCount / wordsPerMinute);
-    };
-
-    return (
-      <div 
-        className={`relative rounded-xl overflow-hidden shadow-md hover:shadow-lg transition-all border bg-white border-gray-100 cursor-pointer min-h-[90px] px-4 py-3 flex flex-col justify-between`}
-        onClick={() => openStoryDetail(story)}
-        style={{ minHeight: 0 }}
-      >
-        {/* 상단: n위 뱃지 + 제목 + 날짜 */}
-        <div className="flex items-start justify-between gap-2 w-full">
-          {/* n위 뱃지 + 제목 */}
-          <div className="flex items-center flex-wrap min-w-0 gap-2 flex-1">
-            {typeof rank === 'number' && (
-              <span className="inline-block bg-yellow-400 text-white text-xs font-bold px-2 py-0.5 rounded-full shadow-md whitespace-nowrap mr-1" style={{ fontSize: '0.95rem', minWidth: '2.5rem', textAlign: 'center' }}>
-                {rank + 1}위
-              </span>
-            )}
-            <span className="text-base font-bold text-gray-800 truncate min-w-0 max-w-full" style={{ lineHeight: 1.3 }}>{story.title || '제목 없음'}</span>
-          </div>
-          {/* 날짜 */}
-          {story.createdAt && (
-            <span className="text-xs text-gray-400 ml-2 whitespace-nowrap flex-shrink-0">{formatDate(story.createdAt)}</span>
-          )}
-        </div>
-        {/* 작성자 */}
-        <div className="text-xs text-gray-500 mb-1 mt-1">by {story.authorName || '익명'}</div>
-        {/* 통계 */}
-        <div className="flex items-center justify-between mt-2">
-          <div className="flex items-center space-x-2 text-xs text-gray-500">
-            {/* 조회수 */}
-            <span className="flex items-center"><svg className="w-4 h-4 mr-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>{story.viewCount || 0}</span>
-            {/* 좋아요 */}
-            <span className="flex items-center"><svg className="w-4 h-4 mr-0.5 text-pink-400" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd"></path></svg>{story.reactionCount || 0}</span>
-            {/* 댓글 수 */}
-            <span className="flex items-center"><svg className="w-4 h-4 mr-0.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8h2a2 2 0 012 2v8a2 2 0 01-2 2H7a2 2 0 01-2-2V10a2 2 0 012-2h2"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 3h-6a2 2 0 00-2 2v2a2 2 0 002 2h6a2 2 0 002-2V5a2 2 0 00-2-2z"/></svg>{story.commentCount || 0}</span>
-            {/* 스크랩(북마크) 수 */}
-            <span className="flex items-center"><svg className="w-4 h-4 mr-0.5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-5-7 5V5z" /></svg>{story.bookmarkCount || 0}</span>
-          </div>
-          {/* 읽기 시간 */}
-          <span className="flex items-center text-xs text-gray-400 ml-2"><svg className="w-4 h-4 mr-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>{calculateReadingTime(story.content)}분</span>
-        </div>
-      </div>
-    );
   };
 
   // 빈 상태 컴포넌트
@@ -388,7 +299,7 @@ export default function LibraryPage() {
                   className="relative group min-w-[85vw] max-w-xs sm:min-w-0 sm:max-w-none md:min-w-0 md:max-w-none snap-center opacity-0 animate-fade-in-up"
                   style={{ animationDelay: `${index * 0.08}s` }}
                 >
-                  <StoryCard story={story} rank={index} />
+                  <StoryCard story={story} rank={index} onClick={() => setSelectedStory(story)} />
                 </div>
               ))}
             </div>
@@ -482,7 +393,7 @@ export default function LibraryPage() {
                         className="opacity-0 animate-fade-in"
                         style={{ animationDelay: `${index * 0.1}s` }}
                       >
-                        <StoryCard story={story} />
+                        <StoryCard story={story} onClick={() => setSelectedStory(story)} />
                       </div>
                     ))}
                   </div>
@@ -520,7 +431,7 @@ export default function LibraryPage() {
                           className="opacity-0 animate-fade-in-up"
                           style={{ animationDelay: `${index * 0.1}s` }}
                         >
-                          <StoryCard story={story} />
+                          <StoryCard story={story} onClick={() => setSelectedStory(story)} />
                         </div>
                       ))}
                     </div>
@@ -548,7 +459,7 @@ export default function LibraryPage() {
                     className="opacity-0 animate-fade-in"
                     style={{ animationDelay: `${index * 0.1}s` }}
                   >
-                    <StoryCard story={story} />
+                    <StoryCard story={story} onClick={() => setSelectedStory(story)} />
                   </div>
                 ))}
               </div>

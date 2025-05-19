@@ -16,212 +16,176 @@ export default function Home() {
     <MainLayout>
       <div className="bg-white">
         {/* 히어로 섹션 */}
-        <div className="relative overflow-hidden bg-gradient-to-b from-indigo-50 via-white to-white">
-          <div className="max-w-7xl mx-auto">
-            <div className="relative z-10 pb-8 sm:pb-16 md:pb-20 lg:max-w-2xl lg:w-full lg:pb-28 xl:pb-32">
-              <main className="mt-10 mx-auto max-w-7xl px-4 sm:mt-12 sm:px-6 md:mt-16 lg:mt-20 lg:px-8 xl:mt-28">
-                <div className="sm:text-center lg:text-left">
-                  <h1 className="text-4xl tracking-tight font-extrabold text-gray-900 sm:text-5xl md:text-6xl">
-                    <span className="block xl:inline">누구나, 몇 분 안에,</span>{' '}
-                    <span className="block text-indigo-600 xl:inline">인생을 책으로.</span>
-                  </h1>
-                  <p className="mt-3 text-base text-gray-500 sm:mt-5 sm:text-lg sm:max-w-xl sm:mx-auto md:mt-5 md:text-xl lg:mx-0">
-                    디지털 자서전으로 여러분의 소중한 인생 이야기를 아름답게 기록하세요. 
-                    단 몇 가지 질문에 답하는 것만으로, AI가 당신만의 특별한 자서전을 만들어 드립니다.
-                  </p>
-                  <div className="mt-5 sm:mt-8 sm:flex sm:justify-center lg:justify-start">
-                    <div className="rounded-md shadow">
-                      <Link href={getStartLink}>
-                        <Button
-                          variant="primary"
-                          size="lg"
-                          className="w-full flex items-center justify-center"
-                        >
-                          {isLoggedIn ? '자서전 작성하기' : '로그인 후 시작하기'}
-                        </Button>
-                      </Link>
-                    </div>
-                    {!isLoggedIn && (
-                      <div className="mt-3 sm:mt-0 sm:ml-3">
-                        <Link href="/auth/register">
-                          <Button
-                            variant="secondary"
-                            size="lg"
-                            className="w-full flex items-center justify-center"
-                          >
-                            회원가입하기
-                          </Button>
-                        </Link>
-                      </div>
-                    )}
-                    <div className="mt-3 sm:mt-0 sm:ml-3">
-                      <Link href="#how-it-works">
-                        <Button
-                          variant="outline"
-                          size="lg"
-                          className="w-full flex items-center justify-center"
-                        >
-                          어떻게 작동하나요?
-                        </Button>
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              </main>
+        <section className="relative overflow-hidden bg-gradient-to-b from-indigo-50 via-white to-white min-h-[70vh] flex items-center">
+          <div className="max-w-7xl mx-auto w-full flex flex-col lg:flex-row items-center justify-between px-4 sm:px-8 py-16 lg:py-32">
+            {/* 왼쪽: 텍스트 */}
+            <div className="flex-1 flex flex-col items-center lg:items-start text-center lg:text-left animate-fade-in">
+              <h1 className="text-5xl sm:text-6xl md:text-7xl font-extrabold tracking-tight text-gray-900 leading-tight mb-6">
+                <span className="block">나만의 인생,</span>
+                <span className="block text-blue-600 drop-shadow-md">디지털 책으로</span>
+              </h1>
+              <p className="mt-2 text-lg sm:text-xl md:text-2xl text-gray-600 max-w-xl mb-8 animate-fade-in" style={{animationDelay:'0.2s'}}>
+                당신의 소중한 이야기를 지금 바로 기록해보세요.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto animate-fade-in" style={{animationDelay:'0.4s'}}>
+                <Link href={getStartLink}>
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    className="px-10 py-4 text-xl font-bold rounded-full shadow-lg transition-transform hover:scale-105 animate-pulse-subtle bg-blue-600 hover:bg-blue-700 focus:ring-blue-500"
+                  >
+                    {isLoggedIn ? '자서전 작성하기' : '로그인 후 시작하기'}
+                  </Button>
+                </Link>
+                {!isLoggedIn && (
+                  <Link href="/auth/register">
+                    <Button
+                      variant="secondary"
+                      size="lg"
+                      className="px-10 py-4 text-xl font-bold rounded-full border-blue-200 text-blue-700 bg-white hover:bg-blue-50 focus:ring-blue-500"
+                    >
+                      회원가입하기
+                    </Button>
+                  </Link>
+                )}
+              </div>
+              
             </div>
-          </div>
-          <div className="lg:absolute lg:inset-y-0 lg:right-0 lg:w-1/2">
-            <div className="h-56 w-full sm:h-72 md:h-96 lg:w-full lg:h-full bg-indigo-100 flex items-center justify-center p-8">
-              <div className="max-w-md text-center">
-                <span className="block text-4xl font-serif italic text-indigo-700">말보다 진한 기억들</span>
-                <span className="mt-2 block text-sm text-indigo-600">당신의 이야기가 여기에 담깁니다</span>
+            {/* 오른쪽: 이미지/일러스트 */}
+            <div className="flex-1 flex justify-center items-center mt-12 lg:mt-0 animate-fade-in" style={{animationDelay:'0.6s'}}>
+              <div className="bg-blue-50 rounded-3xl shadow-xl p-8 flex flex-col items-center">
+                <span className="block text-4xl font-serif italic text-blue-700 mb-2">말보다 진한 기억들</span>
+                <span className="block text-base text-blue-500">당신의 이야기가 여기에 담깁니다</span>
+                {/* 향후: 프로필/책 일러스트 등 추가 가능 */}
               </div>
             </div>
           </div>
-        </div>
+        </section>
+
+
+        {/* 스크롤 유도 */}
+        <div className="w-full flex justify-center items-center py-8">
+                <a href="#how-it-works" className="block">
+                  <span className="inline-block text-blue-400 animate-bounce">
+                    <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="mx-auto">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </span>
+                </a>
+              </div>
 
         {/* 작동 방식 섹션 */}
-        <div id="how-it-works" className="py-16 bg-white overflow-hidden lg:py-24">
-          <div className="relative max-w-xl mx-auto px-4 sm:px-6 lg:px-8 lg:max-w-7xl">
-            <div className="relative">
-              <h2 className="text-center text-3xl leading-8 font-extrabold tracking-tight text-gray-900 sm:text-4xl">
-                어떻게 작동하나요?
-              </h2>
-              <p className="mt-4 max-w-3xl mx-auto text-center text-xl text-gray-500">
-                단 몇 분 만에 당신의 인생이 한 권의 책이 됩니다.
+        <section id="how-it-works" className="py-20 bg-white overflow-hidden lg:py-32">
+          <div className="max-w-5xl mx-auto px-4 sm:px-8">
+            {/* <div className="text-center mb-16">
+              <h2 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-gray-900 mb-4">어떻게 작성하나요?</h2>
+              <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+                누구나 쉽고 빠르게, 원하는 방식으로 자서전을 완성할 수 있습니다.<br />
+                <span className="text-blue-600 font-semibold">AI 자동 생성</span> 또는 <span className="text-blue-600 font-semibold">직접 작성</span> 중 원하는 방법을 선택하세요.
               </p>
-            </div>
-
-            <div className="relative mt-12 lg:mt-20 lg:grid lg:grid-cols-2 lg:gap-8 lg:items-center">
-              <div className="mt-10 -mx-4 relative lg:mt-0" aria-hidden="true">
-                <div className="relative mx-auto rounded-lg shadow-lg overflow-hidden">
-                  <div className="relative p-8 bg-indigo-50 h-72 flex items-center justify-center text-center">
-                    <div>
-                      <p className="text-xl font-medium text-indigo-600 mb-3">미리보기</p>
-                      <p className="text-gray-600">간단한 두 가지 질문으로 자서전의 일부를 미리 만나볼 수 있어요.</p>
-                    </div>
-                  </div>
+            </div> */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* GPT로 작성 카드 */}
+              <div className="bg-blue-50 rounded-2xl shadow-lg p-8 flex flex-col items-center text-center hover:shadow-2xl transition-shadow animate-fade-in">
+                <div className="bg-blue-100 rounded-full p-4 mb-4">
+                  <svg className="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 20h9" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 3.5a5.5 5.5 0 01.5 7.5l-5 5a2 2 0 01-2.8 0l-2-2a2 2 0 010-2.8l5-5a5.5 5.5 0 017.5.5z" />
+                  </svg>
                 </div>
-              </div>
-              <div className="relative">
-                <h3 className="text-2xl font-extrabold text-gray-900 tracking-tight sm:text-3xl">
-                  2개의 간단한 질문에 답하세요
-                </h3>
-                <p className="mt-3 text-lg text-gray-500">
-                  어린 시절의 추억이나 감사한 사람에 대한 간단한 질문에 답하면, 
-                  AI가 당신의 이야기를 바탕으로 자서전의 미리보기를 생성합니다.
+                <h3 className="text-2xl font-bold text-blue-700 mb-2">AI가 대신 써줘요</h3>
+                <span className="inline-block bg-blue-600 text-white text-xs font-semibold rounded-full px-3 py-1 mb-3">추천</span>
+                <p className="text-gray-700 mb-4">
+                  간단한 질문에 답하면, GPT가 당신만의 자서전을 자동으로 완성해줍니다.<br />
+                  <span className="text-blue-600 font-semibold">빠르고, 감성적이며, 누구나 쉽게</span> 멋진 결과물을 얻을 수 있어요.
                 </p>
+                <ul className="text-left text-sm text-gray-600 space-y-1 mb-6">
+                  <li>✔️ 10분 이내 완성</li>
+                  <li>✔️ 글쓰기 부담 없이 시작</li>
+                  <li>✔️ AI가 문학적으로 다듬어줌</li>
+                </ul>
+                <Link href={isLoggedIn ? '/write' : '/auth/login'}>
+                  <Button variant="primary" size="md" className="w-full font-bold rounded-full mt-2">AI로 자서전 시작하기</Button>
+                </Link>
+              </div>
+              {/* 직접 작성 카드 */}
+              <div className="bg-white border border-blue-100 rounded-2xl shadow p-8 flex flex-col items-center text-center hover:shadow-2xl transition-shadow animate-fade-in" style={{animationDelay:'0.1s'}}>
+                <div className="bg-blue-50 rounded-full p-4 mb-4">
+                  <svg className="w-10 h-10 text-blue-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 20h9" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 2h8v4H8z" />
+                  </svg>
+                </div>
+                <h3 className="text-2xl font-bold text-blue-700 mb-2">내 손으로 직접 쓰기</h3>
+                <span className="inline-block bg-blue-100 text-blue-700 text-xs font-semibold rounded-full px-3 py-1 mb-3">자유도 높음</span>
+                <p className="text-gray-700 mb-4">
+                  원하는 챕터, 문장, 스타일로 <span className="text-blue-600 font-semibold">자유롭게</span> 직접 작성할 수 있습니다.<br />
+                  나만의 개성과 감정을 더해 특별한 자서전을 만들 수 있어요.
+                </p>
+                <ul className="text-left text-sm text-gray-600 space-y-1 mb-6">
+                  <li>✔️ 원하는 만큼 수정/추가</li>
+                  <li>✔️ 내 언어, 내 감정 그대로</li>
+                  <li>✔️ 챕터별로 자유롭게 관리</li>
+                </ul>
+                <Link href={isLoggedIn ? '/write?mode=manual' : '/auth/login'}>
+                  <Button variant="secondary" size="md" className="w-full font-bold rounded-full mt-2 border-blue-200 text-blue-700 bg-white hover:bg-blue-50 focus:ring-blue-500">직접 작성하러 가기</Button>
+                </Link>
               </div>
             </div>
+            {/* <div className="text-center mt-14 animate-fade-in" style={{animationDelay:'0.2s'}}>
+              <span className="inline-block bg-blue-600 text-white text-sm font-semibold rounded-full px-5 py-2 shadow animate-pulse-subtle">쉽고, 빠르고, 감동적으로. 당신의 이야기를 시작해보세요!</span>
+            </div> */}
+          </div>
+        </section>
 
-            <div className="relative mt-12 sm:mt-16 lg:mt-24">
-              <div className="lg:grid lg:grid-flow-row-dense lg:grid-cols-2 lg:gap-8 lg:items-center">
-                <div className="lg:col-start-2">
-                  <h3 className="text-2xl font-extrabold text-gray-900 tracking-tight sm:text-3xl">
-                    미리보기 후 전체 자서전으로
-                  </h3>
-                  <p className="mt-3 text-lg text-gray-500">
-                    마음에 드시면, 추가 질문에 답하고 전체 자서전을 완성하세요.
-                    당신만의 디지털 자서전이 완성됩니다.
-                  </p>
-                  <div className="mt-10">
-                    <Link href={getStartLink}>
-                      <Button variant="primary" size="lg">
-                        {isLoggedIn ? '내 자서전 시작하기' : '로그인 후 시작하기'}
-                      </Button>
-                    </Link>
-                  </div>
+        {/* 특징 섹션 삭제, 대신 '왜 자서전을 남겨야 할까요?' 섹션 추가 */}
+        <section className="bg-gradient-to-b from-white to-blue-50 py-24">
+          <div className="max-w-5xl mx-auto px-4 sm:px-8">
+            <div className="text-center mb-14">
+              <h2 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-gray-900 mb-4">왜 자서전을 남겨야 할까요?</h2>
+              <p className="text-xl text-gray-700 max-w-2xl mx-auto">
+                인생은 한 번뿐이지만, 기록은 영원합니다.<br />
+                당신의 이야기는 누군가에게 큰 힘과 영감이 될 수 있습니다.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {/* 이유 카드 1 */}
+              <div className="bg-white rounded-2xl shadow-lg p-8 flex flex-col items-center text-center hover:shadow-2xl transition-shadow animate-fade-in">
+                <div className="bg-blue-100 rounded-full p-4 mb-4">
+                  <svg className="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm0 0V4m0 16v-4" />
+                  </svg>
                 </div>
-
-                <div className="mt-10 -mx-4 relative lg:mt-0 lg:col-start-1">
-                  <div className="relative mx-auto rounded-lg shadow-lg overflow-hidden">
-                    <div className="relative p-8 bg-indigo-50 h-72 flex items-center justify-center text-center">
-                      <div>
-                        <p className="text-xl font-medium text-indigo-600 mb-3">완성된 자서전</p>
-                        <p className="text-gray-600">10개의 챕터로 구성된 완전한 자서전을 만나보세요.</p>
-                      </div>
-                    </div>
-                  </div>
+                <h3 className="text-xl font-bold text-blue-700 mb-2">인생은 한 번, 기록은 영원히</h3>
+                <p className="text-gray-700">지금 남기는 이야기가 미래의 나와 가족, 그리고 세상에 오래도록 남습니다.</p>
+              </div>
+              {/* 이유 카드 2 */}
+              <div className="bg-white rounded-2xl shadow-lg p-8 flex flex-col items-center text-center hover:shadow-2xl transition-shadow animate-fade-in" style={{animationDelay:'0.1s'}}>
+                <div className="bg-blue-100 rounded-full p-4 mb-4">
+                  <svg className="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7" />
+                  </svg>
                 </div>
+                <h3 className="text-xl font-bold text-blue-700 mb-2">나의 지혜와 경험을 다음 세대에</h3>
+                <p className="text-gray-700">내가 살아온 길, 배운 것, 느낀 것들을 자녀와 후손, 그리고 세상에 전할 수 있습니다.</p>
+              </div>
+              {/* 이유 카드 3 */}
+              <div className="bg-white rounded-2xl shadow-lg p-8 flex flex-col items-center text-center hover:shadow-2xl transition-shadow animate-fade-in" style={{animationDelay:'0.2s'}}>
+                <div className="bg-blue-100 rounded-full p-4 mb-4">
+                  <svg className="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 20l9-5-9-5-9 5 9 5zm0-10V4m0 6v10" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-bold text-blue-700 mb-2">누군가에게 위로와 영감이 되는 이야기</h3>
+                <p className="text-gray-700">내 경험과 스토리가 누군가에게 큰 힘이 되고, 세상을 더 따뜻하게 만들 수 있습니다.</p>
               </div>
             </div>
-          </div>
-        </div>
-
-        {/* 특징 섹션 */}
-        <div className="bg-indigo-50 py-16 sm:py-24">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="lg:text-center">
-              <h2 className="text-base text-indigo-600 font-semibold tracking-wide uppercase">특징</h2>
-              <p className="mt-2 text-3xl leading-8 font-extrabold tracking-tight text-gray-900 sm:text-4xl">
-                당신만의 이야기, 쉽게 기록하세요
-              </p>
-              <p className="mt-4 max-w-2xl text-xl text-gray-500 lg:mx-auto">
-                디지털 자서전은 누구나 쉽게 자신의 이야기를 남길 수 있도록 도와드립니다.
-              </p>
-            </div>
-
-            <div className="mt-10">
-              <dl className="space-y-10 md:space-y-0 md:grid md:grid-cols-2 md:gap-x-8 md:gap-y-10">
-                <div className="relative">
-                  <dt>
-                    <div className="absolute flex items-center justify-center h-12 w-12 rounded-md bg-indigo-500 text-white">
-                      <svg className="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                      </svg>
-                    </div>
-                    <p className="ml-16 text-lg leading-6 font-medium text-gray-900">빠르고 간편합니다</p>
-                  </dt>
-                  <dd className="mt-2 ml-16 text-base text-gray-500">
-                    복잡한 글쓰기 과정 없이, 몇 가지 질문에 답하는 것만으로 자서전을 완성합니다.
-                  </dd>
-                </div>
-
-                <div className="relative">
-                  <dt>
-                    <div className="absolute flex items-center justify-center h-12 w-12 rounded-md bg-indigo-500 text-white">
-                      <svg className="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                    </div>
-                    <p className="ml-16 text-lg leading-6 font-medium text-gray-900">아름다운 결과물</p>
-                  </dt>
-                  <dd className="mt-2 ml-16 text-base text-gray-500">
-                    AI가 당신의 답변을 바탕으로 감성적이고 문학적인 자서전을 생성합니다.
-                  </dd>
-                </div>
-
-                <div className="relative">
-                  <dt>
-                    <div className="absolute flex items-center justify-center h-12 w-12 rounded-md bg-indigo-500 text-white">
-                      <svg className="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-                      </svg>
-                    </div>
-                    <p className="ml-16 text-lg leading-6 font-medium text-gray-900">쉽게 공유</p>
-                  </dt>
-                  <dd className="mt-2 ml-16 text-base text-gray-500">
-                    완성된 자서전을 사랑하는 사람들과 쉽게 공유하세요.
-                  </dd>
-                </div>
-
-                <div className="relative">
-                  <dt>
-                    <div className="absolute flex items-center justify-center h-12 w-12 rounded-md bg-indigo-500 text-white">
-                      <svg className="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                      </svg>
-                    </div>
-                    <p className="ml-16 text-lg leading-6 font-medium text-gray-900">안전한 보관</p>
-                  </dt>
-                  <dd className="mt-2 ml-16 text-base text-gray-500">
-                    당신의 이야기는 안전하게 보관되며, 원하는 사람에게만 공유할 수 있습니다.
-                  </dd>
-                </div>
-              </dl>
+            <div className="text-center mt-14 animate-fade-in" style={{animationDelay:'0.3s'}}>
+              <span className="inline-block bg-blue-600 text-white text-lg font-semibold rounded-full px-8 py-4 shadow animate-pulse-subtle">지금, 당신의 이야기를 세상에 남겨보세요!</span>
             </div>
           </div>
-        </div>
+        </section>
 
         {/* CTA 섹션 */}
         <div className="bg-white">

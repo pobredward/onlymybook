@@ -50,21 +50,19 @@ const NARRATIVE_TYPES: NarrativeType[] = [
     description: '성공보다 더 중요한 건, 매일 조금씩 나아지는 것',
     emoji: '🌱',
     label: '가치와 성장'
+  },
+  {
+    id: 'free_topic',
+    title: '자유 주제',
+    description: '원하는 주제로 자유롭게 작성할 수 있습니다.',
+    emoji: '✍️',
+    label: '자유 주제'
   }
 ];
-
-interface PersonalInfo {
-  name?: string;
-  gender?: string;
-  age?: string;
-  location?: string;
-  [key: string]: string | undefined;
-}
 
 export default function NarrativePage() {
   const router = useRouter();
   const [selectedNarrativeType, setSelectedNarrativeType] = useState<string | null>(null);
-  const [personalInfo, setPersonalInfo] = useState<PersonalInfo>({});
   const [error, setError] = useState<string | null>(null);
 
   // 컴포넌트 마운트 시 로컬 스토리지에서 개인 정보 가져오기
@@ -73,22 +71,7 @@ export default function NarrativePage() {
     if (savedNarrativeType) {
       setSelectedNarrativeType(savedNarrativeType);
     }
-
-    // 개인 정보 데이터 불러오기 - 다음 단계로 진행하기 위해 필요한 데이터
-    // (현재 이 페이지에서는 직접 사용하지 않지만, 데이터 흐름 유지를 위해 필요함)
-    const savedPersonalInfo = localStorage.getItem('autobiography_personal_info');
-    if (savedPersonalInfo) {
-      try {
-        setPersonalInfo(JSON.parse(savedPersonalInfo));
-      } catch (e) {
-        console.error('Failed to parse saved personal info:', e);
-        setError('개인 정보를 불러오는데 실패했습니다. 다시 시도해주세요.');
-      }
-    } else {
-      // 개인 정보가 없으면 첫 단계로 리디렉션
-      router.push('/write/personal');
-    }
-  }, [router]);
+  }, []);
 
   // 서사 유형 선택 처리
   const handleNarrativeSelection = (narrativeId: string) => {
@@ -98,55 +81,38 @@ export default function NarrativePage() {
   // 다음 단계로 이동
   const goToNextStep = () => {
     if (!selectedNarrativeType) {
-      setError('서사 유형을 선택해주세요.');
+      setError('주제를 선택해주세요.');
       return;
     }
-
-    // 로컬 스토리지에 선택된 서사 유형 저장
     localStorage.setItem('autobiography_narrative_type', selectedNarrativeType);
-    
-    // 다음 페이지로 이동
     router.push('/write/content');
   };
 
   // 이전 단계로 이동
   const goToPreviousStep = () => {
-    router.push('/write/personal');
+    router.push('/write');
   };
 
-  // 단계 표시기
+  // 단계 표시기 3단계로 변경
   const renderStepIndicator = () => (
     <div className="flex items-center justify-between mb-8 w-full">
       <div className="flex flex-col items-center">
         <div className="w-10 h-10 rounded-full flex items-center justify-center bg-indigo-600 text-white">
           1
         </div>
-        <p className="mt-2 text-sm text-gray-600">개인 정보</p>
+        <p className="mt-2 text-sm text-gray-600">주제 선택</p>
       </div>
-      
       <div className="flex-1 h-1 mx-2 sm:mx-4 bg-indigo-600" />
-      
       <div className="flex flex-col items-center">
-        <div className="w-10 h-10 rounded-full flex items-center justify-center bg-indigo-600 text-white">
+        <div className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-200 text-gray-600">
           2
         </div>
-        <p className="mt-2 text-sm text-gray-600">1장 주제 선택</p>
+        <p className="mt-2 text-sm text-gray-600">작성</p>
       </div>
-      
       <div className="flex-1 h-1 mx-2 sm:mx-4 bg-gray-200" />
-      
       <div className="flex flex-col items-center">
         <div className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-200 text-gray-600">
           3
-        </div>
-        <p className="mt-2 text-sm text-gray-600">1장 작성</p>
-      </div>
-      
-      <div className="flex-1 h-1 mx-2 sm:mx-4 bg-gray-200" />
-      
-      <div className="flex flex-col items-center">
-        <div className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-200 text-gray-600">
-          4
         </div>
         <p className="mt-2 text-sm text-gray-600">공유</p>
       </div>
@@ -155,7 +121,7 @@ export default function NarrativePage() {
 
   return (
     <MainLayout 
-      title="자서전 작성하기 - 1장 주제 선택" 
+      title="자서전 작성하기 - 주제 선택" 
       description="자서전의 첫 장을 어떤 이야기로 시작할지 선택하세요."
     >
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -180,7 +146,7 @@ export default function NarrativePage() {
           
           <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm border border-gray-100">
             <div className="flex justify-between items-center mb-3">
-              <h2 className="text-xl font-bold text-gray-900">자서전 1장 선택</h2>
+              <h2 className="text-xl font-bold text-gray-900">자서전 주제 선택</h2>
               {selectedNarrativeType && (
                 <span className="text-green-600 text-sm flex items-center">
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">

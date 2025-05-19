@@ -26,6 +26,56 @@ const EMOTION_TAGS = [
   { id: 'reflection', name: '성찰', icon: '🧘' }
 ];
 
+// JSON 파싱 유틸 함수 추가
+function parseAutobiographyContent(content: string) {
+  try {
+    const data = JSON.parse(content);
+    if (!data.chapters) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+// 목차 렌더링 함수
+function renderChapters(chapters: {id: string; title: string; sections?: {id: string; title: string;}[]}[]) {
+  return (
+    <ul className="mb-4 ml-2">
+      {chapters.map((chapter) => (
+        <li key={chapter.id} className="mb-1">
+          <span className="font-semibold">{chapter.title}</span>
+          {chapter.sections && (
+            <ul className="ml-4 list-disc">
+              {chapter.sections.map((section) => (
+                <li key={section.id}>{section.title}</li>
+              ))}
+            </ul>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// 1장 1절 미리보기 함수
+function getFirstSectionPreview(chapters: {id: string; title: string; sections?: {id: string; title: string; content?: {children?: {text: string}[]}[] | string;}[]}[]) {
+  if (!chapters?.length) return null;
+  const firstSection = chapters[0]?.sections?.[0];
+  if (!firstSection) return null;
+  let preview = '';
+  if (Array.isArray(firstSection.content)) {
+    preview = firstSection.content.map((c: {children?: {text: string}[]}) => c.children?.map((ch) => ch.text).join(' ')).join(' ');
+  } else if (typeof firstSection.content === 'string') {
+    preview = firstSection.content;
+  }
+  return (
+    <div>
+      <div className="font-semibold mb-1">{chapters[0].title} &gt; {firstSection.title}</div>
+      <div className="bg-gray-50 p-3 rounded border text-gray-700">{preview.slice(0, 100)}{preview.length > 100 ? '...' : ''}</div>
+    </div>
+  );
+}
+
 export const StoryDetail: React.FC<StoryDetailProps> = ({ 
   story, 
   onClose, 
@@ -53,10 +103,13 @@ export const StoryDetail: React.FC<StoryDetailProps> = ({
   // 내용 요약 (100단어)
   const getSummary = () => {
     if (story.summary) return story.summary;
-    
+    if (typeof story.content !== 'string') return '';
     const words = story.content.split(/\s+/).slice(0, 100);
     return words.join(' ') + (words.length >= 100 ? '...' : '');
   };
+
+  // JSON 파싱 시도
+  const parsed = typeof story.content === 'string' ? parseAutobiographyContent(story.content) : null;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-50 flex justify-center items-center p-4">
@@ -141,28 +194,53 @@ export const StoryDetail: React.FC<StoryDetailProps> = ({
             })}
           </div>
           
-          {/* 서문/요약 */}
+          {/* 서문/요약 or 목차 */}
           <div className="mb-6">
             <h2 className="text-lg font-semibold text-gray-800 mb-2">이 자서전은...</h2>
-            <p className="text-gray-600">
-              {getSummary()}
-            </p>
+            {parsed ? (
+              <>
+                <div className="mb-2">목차</div>
+                {renderChapters(parsed.chapters)}
+              </>
+            ) : (
+              <p className="text-gray-600">{getSummary()}</p>
+            )}
           </div>
-          
-          {/* 첫 문단 */}
+          {/* 첫 문단 or 첫 섹션 미리보기 */}
           <div className="mb-6">
-            <h2 className="text-lg font-semibold text-gray-800 mb-2">첫 문장</h2>
-            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 italic">
-              &ldquo;{story.content.split(/[.!?](?:\s|$)/)[0]}...&rdquo;
-            </div>
+            <h2 className="text-lg font-semibold text-gray-800 mb-2">미리보기</h2>
+            {parsed ? (
+              getFirstSectionPreview(parsed.chapters)
+            ) : (
+              typeof story.content === 'string' ? (
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 italic">
+                  &ldquo;{story.content.split(/[.!?](?:\s|$)/)[0]}...&rdquo;
+                </div>
+              ) : null
+            )}
           </div>
         </div>
         
         {/* 하단 버튼 영역 */}
         <div className="p-4 border-t border-gray-200 flex justify-between">
-          <Button variant="outline" onClick={onClose}>
-            닫기
-          </Button>
+          <div className="flex gap-2">
+            {/* 수정하기 버튼: 내가 쓴 글일 때만 노출 (예시로 story.canEdit 플래그 사용) */}
+            {story.canEdit && (
+              <Button variant="outline" onClick={() => {
+                // 항상 Firestore 기반 수정 페이지로 이동
+                if (story.userId && story.storyNumber) {
+                  router.push(`/story/${story.userId}/${story.storyNumber}/edit`);
+                } else {
+                  alert('수정 경로를 찾을 수 없습니다.');
+                }
+              }}>
+                수정하기
+              </Button>
+            )}
+            <Button variant="outline" onClick={onClose}>
+              닫기
+            </Button>
+          </div>
           <Button variant="primary" onClick={() => {
             if (story.shareUrl) {
               router.push(story.shareUrl);

@@ -14,23 +14,19 @@ import { Story } from '@/types';
 import { Plus, Trash2, Save, BookOpen, ChevronDown, ChevronUp, GripVertical, Tag, Globe, Info } from 'lucide-react';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-
-interface Chapter {
-  id: string;
-  title: string;
-  sections: {
-    id: string;
-    title: string;
-    content: string;
-    isQuote?: boolean;
-  }[];
-}
+import { Descendant } from 'slate';
 
 interface Section {
   id: string;
   title: string;
-  content: string;
+  content: string | Descendant[];
   isQuote?: boolean;
+}
+
+interface Chapter {
+  id: string;
+  title: string;
+  sections: Section[];
 }
 
 interface DraggableItem {
@@ -138,7 +134,7 @@ const DraggableSection = ({
       </div>
       
       <TextArea
-        value={section.content}
+        value={typeof section.content === 'string' ? section.content : extractPlainText(section.content)}
         onChange={(e) => handleSectionContentChange(chapterId, section.id, e.target.value)}
         placeholder={section.isQuote ? "인용문 내용을 입력하세요..." : "섹션 내용을 입력하세요..."}
         rows={section.isQuote ? 3 : 6}
@@ -147,6 +143,20 @@ const DraggableSection = ({
     </div>
   );
 };
+
+// Descendant[] → plain text 변환 함수
+function extractPlainText(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content.map(node => {
+      if (typeof node.text === 'string') return node.text;
+      if (Array.isArray(node.children)) return extractPlainText(node.children);
+      if (typeof node.children === 'object') return extractPlainText(node.children);
+      return '';
+    }).join(' ');
+  }
+  return '';
+}
 
 export default function EditStoryPage() {
   const router = useRouter();
@@ -711,79 +721,29 @@ export default function EditStoryPage() {
   // 자서전 저장
   const handleSaveStory = async () => {
     if (!story) return;
-    
     try {
       setIsSaving(true);
       setError(null);
-      
       if (!title.trim()) {
         throw new Error('제목을 입력해주세요.');
       }
-      
-      // 챕터와 섹션을 기반으로 전체 내용 재구성
-      let content = '';
-      
-      // 디버그를 위한 섹션 확인 로깅
-      console.log('저장 전 챕터 및 섹션 구조:', 
-        chapters.map(c => ({
-          id: c.id, 
-          title: c.title, 
-          sections: c.sections.map(s => ({id: s.id, title: s.title, isQuote: s.isQuote}))
-        }))
-      );
-      
-      chapters.forEach((chapter, chapterIndex) => {
-        // 챕터 제목 추가
-        content += `# ${chapter.title}\n\n`;
-        
-        // 챕터의 섹션들은 배열에 있는 순서대로 처리
-        chapter.sections.forEach((section, sectionIndex) => {
-          // 현재 처리 중인 섹션 로깅 (디버깅용)
-          console.log(`저장 중 - 챕터 ${chapterIndex+1}, 섹션 ${sectionIndex+1}: ${section.id} (${section.isQuote ? '인용문' : '일반'})`);
-          
-          // 섹션 내용 추가 (내용이 있을 때만)
-          if (section.content.trim()) {
-            content += `${section.content.trim()}\n\n`;
-          }
-        });
-        
-        // 마지막 챕터가 아니면 추가 줄 바꿈
-        if (chapterIndex < chapters.length - 1) {
-          content += '\n';
-        }
-      });
-      
-      // 최종 콘텐츠에서 연속된 줄바꿈 제거 (3개 이상의 연속 줄바꿈을 2개로 변경)
-      content = content.replace(/\n{3,}/g, '\n\n');
-      
-      // DB에 저장 전 최종 확인
-      console.log('최종 저장 콘텐츠 (저장 직전):', content.substring(0, 200) + '...'); 
-      
-      // 섹션 순서가 올바르게 저장되었는지 확인하기 위한 추가 로깅
-      console.log('최종 저장 직전 데이터 구조:', JSON.stringify(
-        chapters.map(c => ({
-          id: c.id, 
-          title: c.title, 
-          sections: c.sections.map(s => ({
-            id: s.id, 
-            title: s.title, 
-            isQuote: s.isQuote,
-            contentPreview: s.content.substring(0, 20) + '...'
-          }))
-        })), null, 2)
-      );
-      
-      // DB에 저장
-      await updateStory(story.id, {
-        title,
-        content: JSON.stringify({ chapters }), // richtext 구조로 저장
-        authorName,
-        endingTitle,
-        endingMessage,
-        tags: selectedTags,
-        isPublic
-      });
-      
+      // 변경된 필드만 추출
+      const updateData: any = {};
+      if (title !== story.title) updateData.title = title;
+      if (authorName !== story.authorName) updateData.authorName = authorName;
+      if (endingTitle !== story.endingTitle) updateData.endingTitle = endingTitle;
+      if (endingMessage !== story.endingMessage) updateData.endingMessage = endingMessage;
+      if (JSON.stringify(chapters) !== JSON.stringify((story.content as any)?.chapters)) {
+        updateData.content = JSON.stringify({ chapters });
+      }
+      if (JSON.stringify(selectedTags) !== JSON.stringify(story.tags)) updateData.tags = selectedTags;
+      if (isPublic !== story.isPublic) updateData.isPublic = isPublic;
+      if (Object.keys(updateData).length === 0) {
+        toast.info('변경된 내용이 없습니다.');
+        setIsSaving(false);
+        return;
+      }
+      await updateStory(story.id, updateData);
       toast.success('자서전이 성공적으로 저장되었습니다.');
       router.push(`/story/${userId}/${storyNumber}`);
     } catch (err) {
@@ -817,6 +777,13 @@ export default function EditStoryPage() {
         return chapter;
       })
     );
+  };
+  
+  const calculateReadingTime = (content: string | Descendant[]) => {
+    if (typeof content !== 'string') return 1;
+    const words = content.trim().split(/\s+/).length;
+    const minutes = Math.ceil(words / 200); // 일반적으로 1분에 200단어 읽는다고 가정
+    return minutes;
   };
   
   if (isLoading || loading) {

@@ -189,7 +189,6 @@ const NARRATIVE_TYPES: NarrativeType[] = [
 export default function ContentPage() {
   const router = useRouter();
   const [selectedNarrativeType, setSelectedNarrativeType] = useState<string | null>(null);
-  const [personalInfo, setPersonalInfo] = useState<Record<string, unknown>>({});
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [isFormComplete, setIsFormComplete] = useState<boolean>(false);
@@ -203,20 +202,6 @@ export default function ContentPage() {
     } else {
       // 서사 유형이 없으면 이전 단계로 리디렉션
       router.push('/write/narrative');
-      return;
-    }
-
-    // 개인 정보 불러오기
-    const savedPersonalInfo = localStorage.getItem('autobiography_personal_info');
-    if (savedPersonalInfo) {
-      try {
-        setPersonalInfo(JSON.parse(savedPersonalInfo));
-      } catch (e) {
-        console.error('Failed to parse saved personal info:', e);
-      }
-    } else {
-      // 개인 정보가 없으면 첫 단계로 리디렉션
-      router.push('/write/personal');
       return;
     }
 
@@ -234,6 +219,11 @@ export default function ContentPage() {
   // 폼 작성 완료 여부 확인
   useEffect(() => {
     if (!selectedNarrativeType) return;
+
+    if (selectedNarrativeType === 'free_topic') {
+      setIsFormComplete(!!answers['free_topic_content'] && answers['free_topic_content'].trim() !== '');
+      return;
+    }
 
     const narrativeType = NARRATIVE_TYPES.find(n => n.id === selectedNarrativeType);
     if (!narrativeType) return;
@@ -275,43 +265,47 @@ export default function ContentPage() {
   };
 
   // 선택된 서사 유형 가져오기
-  const selectedNarrative = selectedNarrativeType 
-    ? NARRATIVE_TYPES.find(n => n.id === selectedNarrativeType) 
-    : null;
+  let selectedNarrative = null;
+  if (selectedNarrativeType === 'free_topic') {
+    selectedNarrative = {
+      id: 'free_topic',
+      title: '자유 주제',
+      description: '아는 대로, 기억나는 대로, 마음 가는 대로 다 써주세요! GPT가 멋진 자서전으로 만들어줍니다.',
+      emoji: '✍️',
+      questions: [
+        {
+          id: 'free_topic_content',
+          text: '자유롭게 작성하세요',
+          type: 'longText',
+          placeholder: '아는 대로, 기억나는 대로, 마음 가는 대로 다 써주세요!\nGPT가 멋진 자서전으로 만들어줍니다.',
+          required: true
+        }
+      ]
+    };
+  } else if (selectedNarrativeType) {
+    selectedNarrative = NARRATIVE_TYPES.find(n => n.id === selectedNarrativeType);
+  }
 
-  // 단계 표시기
+  // 단계 표시기 3단계로 변경
   const renderStepIndicator = () => (
     <div className="flex items-center justify-between mb-8 w-full">
       <div className="flex flex-col items-center">
         <div className="w-10 h-10 rounded-full flex items-center justify-center bg-indigo-600 text-white">
           1
         </div>
-        <p className="mt-2 text-sm text-gray-600">개인 정보</p>
+        <p className="mt-2 text-sm text-gray-600">주제 선택</p>
       </div>
-      
       <div className="flex-1 h-1 mx-2 sm:mx-4 bg-indigo-600" />
-      
       <div className="flex flex-col items-center">
         <div className="w-10 h-10 rounded-full flex items-center justify-center bg-indigo-600 text-white">
           2
         </div>
-        <p className="mt-2 text-sm text-gray-600">1장 주제 선택</p>
+        <p className="mt-2 text-sm text-gray-600">작성</p>
       </div>
-      
-      <div className="flex-1 h-1 mx-2 sm:mx-4 bg-indigo-600" />
-      
-      <div className="flex flex-col items-center">
-        <div className="w-10 h-10 rounded-full flex items-center justify-center bg-indigo-600 text-white">
-          3
-        </div>
-        <p className="mt-2 text-sm text-gray-600">1장 작성</p>
-      </div>
-      
       <div className="flex-1 h-1 mx-2 sm:mx-4 bg-gray-200" />
-      
       <div className="flex flex-col items-center">
         <div className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-200 text-gray-600">
-          4
+          3
         </div>
         <p className="mt-2 text-sm text-gray-600">공유</p>
       </div>
@@ -345,7 +339,9 @@ export default function ContentPage() {
             당신의 이야기를 들려주세요
           </h1>
           <p className="mt-4 text-base sm:text-xl text-gray-500">
-            질문에 답하면서 자서전의 첫 장을 완성해보세요.
+            {selectedNarrativeType === 'free_topic'
+              ? '아는 대로, 기억나는 대로, 마음 가는 대로 다 써주세요! GPT가 멋진 자서전으로 만들어줍니다.'
+              : '질문에 답하면서 자서전의 첫 장을 완성해보세요.'}
           </p>
         </div>
 
@@ -364,32 +360,47 @@ export default function ContentPage() {
                 <span role="img" aria-label={selectedNarrative.title}>{selectedNarrative.emoji}</span>
               </div>
               <h2 className="text-xl font-bold text-gray-900">
-                1장. {selectedNarrative.title} 작성하기
+                {selectedNarrativeType === 'free_topic' ? '자유 주제 작성하기' : `1장. ${selectedNarrative.title} 작성하기`}
               </h2>
             </div>
             
             <p className="text-gray-600 mb-6">
-              이 질문들에 답변하여 자서전의 첫 장을 완성해보세요.
-              {selectedNarrative.id === 'type_struggle' && ' 당신의 인생에서 겪은 어려움과 극복 과정에 대해 이야기해주세요.'}
-              {selectedNarrative.id === 'type_success' && ' 당신의 성공 스토리와 그 과정에서의 경험을 공유해주세요.'}
-              {selectedNarrative.id === 'type_experience' && ' 다양한 경험을 통해 배운 교훈과 인사이트를 들려주세요.'}
-              {selectedNarrative.id === 'type_wound_heal' && ' 상처와 아픔을 어떻게 극복하고 치유해왔는지 이야기해주세요.'}
-              {selectedNarrative.id === 'type_values_growth' && ' 당신의 성장 과정과 중요한 가치관에 대해 공유해주세요.'}
+              {selectedNarrativeType === 'free_topic'
+                ? '아는 대로, 기억나는 대로, 마음 가는 대로 다 써주세요!\nGPT가 멋진 자서전으로 만들어줍니다.'
+                : '이 질문들에 답변하여 자서전의 첫 장을 완성해보세요.'}
+              {selectedNarrative && selectedNarrative.id === 'type_struggle' && ' 당신의 인생에서 겪은 어려움과 극복 과정에 대해 이야기해주세요.'}
+              {selectedNarrative && selectedNarrative.id === 'type_success' && ' 당신의 성공 스토리와 그 과정에서의 경험을 공유해주세요.'}
+              {selectedNarrative && selectedNarrative.id === 'type_experience' && ' 다양한 경험을 통해 배운 교훈과 인사이트를 들려주세요.'}
+              {selectedNarrative && selectedNarrative.id === 'type_wound_heal' && ' 상처와 아픔을 어떻게 극복하고 치유해왔는지 이야기해주세요.'}
+              {selectedNarrative && selectedNarrative.id === 'type_values_growth' && ' 당신의 성장 과정과 중요한 가치관에 대해 공유해주세요.'}
             </p>
             
             <div className="space-y-6">
-              {selectedNarrative.questions.map(question => (
-                <div key={question.id} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+              {selectedNarrativeType === 'free_topic' ? (
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
                   <TextArea
-                    label={question.text + (question.required ? ' *' : '')}
-                    placeholder={question.placeholder}
-                    value={answers[question.id] || ''}
-                    onChange={(e) => handleAnswerChange(question.id, e.target.value)}
-                    required={question.required}
-                    rows={6}
+                    label="자유롭게 작성하세요 *"
+                    placeholder="자서전에 꼭 담고 싶은 이야기, 하고 싶은 말, 남기고 싶은 기록 등 무엇이든 자유롭게 작성해주세요."
+                    value={answers['free_topic_content'] || ''}
+                    onChange={(e) => handleAnswerChange('free_topic_content', e.target.value)}
+                    required
+                    rows={12}
                   />
                 </div>
-              ))}
+              ) : (
+                selectedNarrative.questions.map(question => (
+                  <div key={question.id} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <TextArea
+                      label={question.text + (question.required ? ' *' : '')}
+                      placeholder={question.placeholder}
+                      value={answers[question.id] || ''}
+                      onChange={(e) => handleAnswerChange(question.id, e.target.value)}
+                      required={question.required}
+                      rows={6}
+                    />
+                  </div>
+                ))
+              )}
             </div>
             
             <div className="flex justify-between mt-8">

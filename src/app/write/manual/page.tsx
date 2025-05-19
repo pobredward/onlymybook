@@ -406,9 +406,27 @@ export default function ManualWritePage() {
       };
       const cleanedStoryData = removeUndefinedDeep(storyData);
       if (latestStoryId) {
-        // 기존 임시 스토리 업데이트
-        await updateStory(latestStoryId, { content: cleanedStoryData });
-        toast.success('임시 저장이 완료되었습니다.');
+        try {
+          // 기존 임시 스토리 업데이트
+          await updateStory(latestStoryId, { content: cleanedStoryData });
+          toast.success('임시 저장이 완료되었습니다.');
+        } catch (e: unknown) {
+          // 문서가 없으면 새로 생성
+          const errorMsg = e instanceof Error ? e.message : '';
+          if (errorMsg.includes('No document to update')) {
+            const { storyId, userId: savedUserId, storyNumber } = await saveFullStory(userId, cleanedStoryData);
+            if (typeof window !== 'undefined') {
+              localStorage.setItem('autobiography_personal_info', JSON.stringify({
+                userId: savedUserId,
+                latestStoryId: storyId,
+                storyNumber
+              }));
+            }
+            toast.success('임시 저장이 완료되었습니다.');
+          } else {
+            throw e;
+          }
+        }
       } else {
         // 새로 생성
         const { storyId, userId: savedUserId, storyNumber } = await saveFullStory(userId, cleanedStoryData);

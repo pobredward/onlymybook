@@ -100,6 +100,17 @@ export default function StoryByUserPage() {
     return minutes;
   };
 
+  // JSON string인지, 그리고 chapters 구조인지 판별하는 유틸
+  function isStructuredStoryContent(content: unknown): boolean {
+    if (typeof content !== 'string') return false;
+    try {
+      const obj = JSON.parse(content);
+      return !!(obj && obj.chapters);
+    } catch {
+      return false;
+    }
+  }
+
   if (isLoading) {
     return (
       <MainLayout title="자서전 로딩 중" description="자서전을 불러오고 있습니다.">
@@ -252,64 +263,68 @@ export default function StoryByUserPage() {
           mobileMenuComponent={<MobileMenuActions />}
         />
       ) : (
-        // 클래식 뷰 (기존 디자인)
-        <div className="max-w-4xl mx-auto px-4 py-12">
-          {/* 헤더 */}
-          <div className="mb-12">
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <h1 className="text-4xl font-bold text-gray-900 mb-4">{story.title}</h1>
-                <div className="flex items-center text-gray-500 text-sm mb-2">
-                  <span className="mr-2">
-                    {new Date(story.createdAt).toLocaleDateString('ko-KR', {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric'
-                    })}
-                  </span>
-                  <span className="mx-2">•</span>
-                  <span>읽는 시간 약 {readingTime}분</span>
-                  {story.viewCount && (
-                    <>
-                      <span className="mx-2">•</span>
-                      <span>조회 {story.viewCount}회</span>
-                    </>
-                  )}
+        // 클래식 뷰 (구조화 자서전이면 슬라이드, 아니면 기존 방식)
+        isStructuredStoryContent(story.content) ? (
+          <StoryViewer
+            story={story}
+            viewMode="classic"
+            hasHeader={false}
+          />
+        ) : (
+          <div className="max-w-4xl mx-auto px-4 py-12">
+            {/* 헤더 */}
+            <div className="mb-12">
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <h1 className="text-4xl font-bold text-gray-900 mb-4">{story.title}</h1>
+                  <div className="flex items-center text-gray-500 text-sm mb-2">
+                    <span className="mr-2">
+                      {new Date(story.createdAt).toLocaleDateString('ko-KR', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      })}
+                    </span>
+                    <span className="mx-2">•</span>
+                    <span>읽는 시간 약 {readingTime}분</span>
+                    {story.viewCount && (
+                      <>
+                        <span className="mx-2">•</span>
+                        <span>조회 {story.viewCount}회</span>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
+              <div className="h-1 w-full bg-gradient-to-r from-indigo-500 to-blue-500 rounded"></div>
             </div>
-            
-            <div className="h-1 w-full bg-gradient-to-r from-indigo-500 to-blue-500 rounded"></div>
-          </div>
-          
-          {/* 본문 */}
-          <div className="prose prose-lg max-w-none">
-            {renderContent(story.content)}
-          </div>
-          
-          {/* 태그 섹션 */}
-          {story.tags && story.tags.length > 0 && (
-            <div className="mt-12 pt-6 border-t border-gray-200">
-              <div className="flex flex-wrap gap-2">
-                {story.tags.map((tag, index) => (
-                  <span key={index} className="inline-block bg-gray-100 rounded-full px-3 py-1 text-sm font-semibold text-gray-700">
-                    #{tag}
-                  </span>
-                ))}
+            {/* 본문 */}
+            <div className="prose prose-lg max-w-none">
+              {typeof story.content === 'string' ? renderContent(story.content) : null}
+            </div>
+            {/* 태그 섹션 */}
+            {story.tags && story.tags.length > 0 && (
+              <div className="mt-12 pt-6 border-t border-gray-200">
+                <div className="flex flex-wrap gap-2">
+                  {story.tags.map((tag, index) => (
+                    <span key={index} className="inline-block bg-gray-100 rounded-full px-3 py-1 text-sm font-semibold text-gray-700">
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
               </div>
+            )}
+            {/* 작업 버튼 */}
+            <div className="mt-12 flex justify-end space-x-4">
+              <Button 
+                onClick={() => router.push('/')}
+                variant="secondary"
+              >
+                홈으로
+              </Button>
             </div>
-          )}
-
-          {/* 작업 버튼 */}
-          <div className="mt-12 flex justify-end space-x-4">
-            <Button 
-              onClick={() => router.push('/')}
-              variant="secondary"
-            >
-              홈으로
-            </Button>
           </div>
-        </div>
+        )
       )}
     </MainLayout>
   );

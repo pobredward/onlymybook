@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/Button';
 import { BookOpen, Heart, MessageSquare, Plus, Share2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { MainLayout } from '@/components/layout/MainLayout';
+import { StoryDetail } from '@/app/library/StoryDetail';
+import { StoryCard } from '@/components/story/StoryCard';
 
 export default function MyBookPage() {
   const [stories, setStories] = useState<Story[]>([]);
@@ -16,6 +18,7 @@ export default function MyBookPage() {
   const [isLoading, setIsLoading] = useState(true);
   const { currentUser, userData, loading } = useAuth();
   const router = useRouter();
+  const [selectedStory, setSelectedStory] = useState<Story | null>(null);
 
   useEffect(() => {
     async function fetchMyStories() {
@@ -84,7 +87,7 @@ export default function MyBookPage() {
           ) : stories.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {stories.map((story) => (
-                <StoryCard key={story.id} story={story} />
+                <StoryCard key={story.id} story={{...story, canEdit: true}} onClick={() => setSelectedStory({...story, canEdit: true} as Story)} />
               ))}
             </div>
           ) : (
@@ -114,7 +117,7 @@ export default function MyBookPage() {
           ) : bookmarks.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {bookmarks.map((story) => (
-                <StoryCard key={story.id} story={story} />
+                <StoryCard key={story.id} story={story} onClick={() => setSelectedStory(story as Story)} />
               ))}
             </div>
           ) : (
@@ -130,90 +133,16 @@ export default function MyBookPage() {
             </div>
           )}
         </div>
+        {/* StoryDetail 모달 */}
+        {selectedStory && (
+          <StoryDetail
+            story={selectedStory}
+            onClose={() => setSelectedStory(null)}
+            onBookmark={() => {}}
+            isBookmarked={false}
+          />
+        )}
       </div>
     </MainLayout>
-  );
-}
-
-interface StoryWithReactions extends Story {
-  comments?: { length: number };
-  reactions?: Array<{ type: string }>;
-}
-
-function StoryCard({ story }: { story: StoryWithReactions }) {
-  const router = useRouter();
-  
-  const formatDate = (dateString: number | string) => {
-    const date = typeof dateString === 'number' 
-      ? new Date(dateString) 
-      : new Date(dateString);
-    
-    return new Intl.DateTimeFormat('ko-KR', {
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric'
-    }).format(date);
-  };
-  
-  const handleClick = () => {
-    if (story.shareUrl) {
-      // shareUrl이 있으면 해당 URL 사용
-      router.push(story.shareUrl);
-    } else if (story.userId && story.storyNumber) {
-      // userId와 storyNumber로 URL 구성
-      router.push(`/story/${story.userId}/${story.storyNumber}`);
-    } else {
-      // 예외 처리: ID로 접근
-      router.push(`/story/${story.id}`);
-    }
-  };
-  
-  const handleShare = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (story.shareUrl) {
-      navigator.clipboard.writeText(window.location.origin + story.shareUrl);
-      toast.success('링크가 복사되었습니다.');
-    }
-  };
-
-  return (
-    <div className="border rounded-lg overflow-hidden hover:shadow-md transition-shadow cursor-pointer" onClick={handleClick}>
-      <div className="relative h-40 bg-gradient-to-r from-blue-100 to-indigo-100">
-        <div className="absolute inset-0 flex items-center justify-center">
-          <BookOpen size={48} className="text-gray-400" />
-        </div>
-      </div>
-      
-      <div className="p-4">
-        <h3 className="text-lg font-semibold line-clamp-1">{story.title}</h3>
-        
-        <p className="text-sm text-gray-500 mb-2 mt-2">
-          작성일: {formatDate(story.createdAt)}
-        </p>
-        <p className="text-sm line-clamp-2 text-gray-700">
-          {story.summary || story.content?.substring(0, 100) || '내용 없음'}...
-        </p>
-      </div>
-      
-      <div className="flex justify-between px-4 py-3 border-t">
-        <div className="flex items-center gap-3">
-          <span className="flex items-center text-sm text-gray-500">
-            <MessageSquare size={14} className="mr-1" />
-            {story.comments?.length || 0}
-          </span>
-          <span className="flex items-center text-sm text-gray-500">
-            <Heart size={14} className="mr-1" />
-            {story.reactions?.filter(r => r.type === 'like').length || 0}
-          </span>
-        </div>
-        
-        <button 
-          className="p-1 rounded-full hover:bg-gray-100"
-          onClick={handleShare}
-        >
-          <Share2 size={16} />
-        </button>
-      </div>
-    </div>
   );
 } 

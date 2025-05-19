@@ -351,7 +351,11 @@ export const savePreviewStory = async (userId: string, content: string): Promise
 };
 
 // 전체 스토리 저장
-export const saveFullStory = async (userId: string, content: string | object, previewStoryId?: string): Promise<{ storyId: string, userId: string, storyNumber: number }> => {
+export const saveFullStory = async (
+  userId: string,
+  content: any,
+  previewStoryId?: string
+): Promise<{ storyId: string, userId: string, storyNumber: number }> => {
   try {
     // 사용자의 스토리 개수 확인
     let storyNumber = 1;
@@ -368,15 +372,33 @@ export const saveFullStory = async (userId: string, content: string | object, pr
       storyNumber = userStoryCount + 1;
     }
     
+    // content가 객체이고 description, authorName, tags, isPublic 등 메타데이터가 있으면 추출
+    const meta: {
+      description?: string;
+      authorName?: string;
+      tags?: string[];
+      isPublic?: boolean;
+      title?: string;
+    } = {};
+    if (content && typeof content === 'object') {
+      meta.description = content.description || '';
+      meta.authorName = content.authorName || '';
+      meta.tags = content.tags || [];
+      meta.isPublic = typeof content.isPublic === 'boolean' ? content.isPublic : false;
+      meta.title = content.title || '디지털 자서전';
+    }
     const storyData = {
       userId,
       storyNumber,
-      title: '디지털 자서전',
+      title: meta.title || '디지털 자서전',
       content: typeof content === 'string' ? content : JSON.stringify(content),
       updatedAt: Date.now(),
       isPreview: false,
       isPaid: true,
-      isPublic: false // 기본값 false로 설정
+      isPublic: meta.isPublic ?? false,
+      description: meta.description ?? '',
+      authorName: meta.authorName ?? '',
+      tags: meta.tags ?? [],
     };
     
     let storyId: string;

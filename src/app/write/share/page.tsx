@@ -20,167 +20,9 @@ interface ShareSettings {
   allowReactions: boolean;
 }
 
-const PreviewPanel = ({
-  preview,
-  selectedPersonalInfo,
-  selectedNarrationType,
-  contentAnswers,
-  isLoading,
-}: {
-  preview: string;
-  selectedPersonalInfo: string[];
-  selectedNarrationType: string;
-  contentAnswers: Record<string, string>;
-  isLoading: boolean;
-}) => {
-  if (isLoading) {
-    return (
-      <div className="preview-panel bg-white p-6 rounded-lg shadow-md h-full flex items-center justify-center">
-        <div className="text-center">
-          <LoadingSpinner size="lg" />
-          <p className="mt-4 text-gray-600">미리보기를 생성하는 중입니다...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // 선택된 내용에 따라 다른 스타일이나 추가 요소 표시 가능
-  return (
-    <div className="preview-panel bg-white p-6 rounded-lg shadow-md h-full overflow-auto">
-      <div className="prose prose-lg mx-auto">
-        <div className="text-xl font-semibold mb-6 text-gray-800">미리보기</div>
-        <div className="whitespace-pre-line">
-          {preview || "미리보기를 생성하려면 '미리보기 생성' 버튼을 클릭하세요."}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const ShareSection = ({
-  previewUrl,
-  fullStoryUrl,
-  handleGenerateLink,
-  isGenerating,
-  isShared,
-  setIsSettingsVisible,
-}: {
-  previewUrl: string | null;
-  fullStoryUrl: string | null;
-  handleGenerateLink: () => void;
-  isGenerating: boolean;
-  isShared: boolean;
-  setIsSettingsVisible: (visible: boolean) => void;
-}) => {
-  const router = useRouter();
-  
-  const copyLink = (link: string) => {
-    if (!link) return;
-    navigator.clipboard.writeText(link);
-    toast.success("링크가 복사되었습니다!");
-  };
-
-  const shareKakao = (link: string) => {
-    if (!link || !window.Kakao) return;
-    
-    // 카카오 공유하기 구현
-    window.Kakao.Share.sendDefault({
-      objectType: 'feed',
-      content: {
-        title: '나의 디지털 자서전',
-        description: '나의 특별한 이야기를 확인해보세요.',
-        imageUrl: 'https://your-site.com/images/preview-image.jpg',
-        link: {
-          mobileWebUrl: link,
-          webUrl: link,
-        },
-      },
-      buttons: [
-        {
-          title: '자서전 읽기',
-          link: {
-            mobileWebUrl: link,
-            webUrl: link,
-          },
-        },
-      ],
-    });
-  };
-
-  return (
-    <div className="share-section bg-white p-6 rounded-lg shadow-md">
-      <h2 className="text-2xl font-bold mb-6">자서전 링크 생성</h2>
-      
-      {!isShared ? (
-        <div className="mb-8">
-          <p className="text-gray-600 mb-6">
-            자서전 링크를 생성하면 다른 사람들과 공유할 수 있습니다.
-          </p>
-          
-          <Button
-            onClick={handleGenerateLink}
-            isLoading={isGenerating}
-            className="w-full py-3"
-          >
-            자서전 생성 및 링크 만들기
-          </Button>
-          
-          <p className="text-sm text-gray-500 mt-4">
-            * 링크 생성 후에는 내용을 수정할 수 없습니다.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-6">
-          <div className="mt-4">
-            <h3 className="text-lg font-medium mb-2">공유 링크</h3>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={previewUrl || ""}
-                readOnly
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm"
-              />
-              <Button
-                onClick={() => previewUrl && copyLink(previewUrl)}
-                variant="outline"
-                size="sm"
-              >
-                복사
-              </Button>
-            </div>
-            
-            <div className="mt-6 flex flex-wrap gap-4">
-              <Button
-                onClick={() => previewUrl && shareKakao(previewUrl)}
-                className="flex items-center gap-2 bg-yellow-400 hover:bg-yellow-500 text-black"
-              >
-                <Image 
-                  src="/images/kakao-icon.png" 
-                  alt="Kakao" 
-                  width={20} 
-                  height={20} 
-                />
-                카카오로 공유하기
-              </Button>
-              
-              <Button
-                onClick={() => previewUrl && window.open(previewUrl, "_blank")}
-                variant="outline"
-              >
-                미리보기 보기
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
 export default function SharePage() {
   const router = useRouter();
   const { currentUser, loading: authLoading } = useAuth();
-  const [personalInfo, setPersonalInfo] = useState<Record<string, unknown>>({});
   const [narrativeType, setNarrativeType] = useState<string | null>(null);
   const [contentAnswers, setContentAnswers] = useState<Record<string, string>>({});
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
@@ -243,20 +85,6 @@ export default function SharePage() {
       return;
     }
 
-    // 개인 정보 불러오기
-    const savedPersonalInfo = localStorage.getItem('autobiography_personal_info');
-    if (savedPersonalInfo) {
-      try {
-        setPersonalInfo(JSON.parse(savedPersonalInfo));
-      } catch (e) {
-        console.error('Failed to parse saved personal info:', e);
-      }
-    } else {
-      // 개인 정보가 없으면 첫 단계로 리디렉션
-      router.push('/write/personal');
-      return;
-    }
-
     // 사용자 ID 확인
     const checkUserCustomId = async () => {
       if (currentUser && !currentUser.isAnonymous) {
@@ -309,7 +137,7 @@ export default function SharePage() {
   // 자서전 미리보기 생성 및 링크 생성
   const generatePreviewStory = async () => {
     // 필수 정보 체크
-    if (!personalInfo || !narrativeType || Object.keys(contentAnswers).length === 0) {
+    if (!narrativeType || Object.keys(contentAnswers).length === 0) {
       setShowWarning(true);
       return;
     }
@@ -341,20 +169,6 @@ export default function SharePage() {
       // 필요한 정보를 모두 로컬 스토리지에 저장
       const allAnswers: Record<string, string> = {};
       
-      // 개인 정보를 문자열로 변환하여 추가
-      Object.entries(personalInfo).forEach(([key, value]) => {
-        if (typeof value === 'string') {
-          allAnswers[`개인정보_${key}`] = value;
-        } else if (value !== null && value !== undefined) {
-          allAnswers[`개인정보_${key}`] = String(value);
-        }
-      });
-      
-      // 내용 답변 추가
-      Object.entries(contentAnswers).forEach(([key, value]) => {
-        allAnswers[key] = value;
-      });
-      
       // 서사 유형 추가
       if (narrativeType) {
         allAnswers['서사유형'] = narrativeType;
@@ -380,7 +194,6 @@ export default function SharePage() {
   // 로컬 스토리지에 데이터 저장
   const saveDataToLocalStorage = () => {
     const dataToSave = {
-      personalInfo,
       narrativeType,
       contentAnswers,
       timestamp: Date.now()
@@ -412,39 +225,26 @@ export default function SharePage() {
     }
   };
 
-  // 단계 표시기
+  // 단계 표시기 3단계로 변경
   const renderStepIndicator = () => (
     <div className="flex items-center justify-between mb-8 w-full">
       <div className="flex flex-col items-center">
         <div className="w-10 h-10 rounded-full flex items-center justify-center bg-indigo-600 text-white">
           1
         </div>
-        <p className="mt-2 text-sm text-gray-600">개인 정보</p>
+        <p className="mt-2 text-sm text-gray-600">주제 선택</p>
       </div>
-      
       <div className="flex-1 h-1 mx-2 sm:mx-4 bg-indigo-600" />
-      
       <div className="flex flex-col items-center">
         <div className="w-10 h-10 rounded-full flex items-center justify-center bg-indigo-600 text-white">
           2
         </div>
-        <p className="mt-2 text-sm text-gray-600">1장 주제 선택</p>
+        <p className="mt-2 text-sm text-gray-600">작성</p>
       </div>
-      
       <div className="flex-1 h-1 mx-2 sm:mx-4 bg-indigo-600" />
-      
       <div className="flex flex-col items-center">
         <div className="w-10 h-10 rounded-full flex items-center justify-center bg-indigo-600 text-white">
           3
-        </div>
-        <p className="mt-2 text-sm text-gray-600">1장 작성</p>
-      </div>
-      
-      <div className="flex-1 h-1 mx-2 sm:mx-4 bg-indigo-600" />
-      
-      <div className="flex flex-col items-center">
-        <div className="w-10 h-10 rounded-full flex items-center justify-center bg-indigo-600 text-white">
-          4
         </div>
         <p className="mt-2 text-sm text-gray-600">공유</p>
       </div>

@@ -10,6 +10,7 @@ import { addComment, getComments, deleteComment, updateComment, toggleReaction, 
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import Link from 'next/link';
+import { Descendant } from 'slate';
 
 // 색상 테마 정의
 const THEMES = [
@@ -26,15 +27,17 @@ const HIGHLIGHT_KEYWORDS = [
   '깨달았다', '느꼈다', '배웠다', '변화했다', '꿈꾸었다'
 ];
 
+interface Section {
+  id: string;
+  title: string;
+  content: string | Descendant[];
+  isQuote?: boolean;
+}
+
 interface Chapter {
   id: string;
   title: string;
-  sections: {
-    id: string;
-    title: string;
-    content: string;
-    isQuote: boolean;
-  }[];
+  sections: Section[];
 }
 
 interface Comment {
@@ -51,6 +54,21 @@ interface StoryViewerProps {
   viewMode?: 'modern' | 'classic';
   hasHeader?: boolean;
   mobileMenuComponent?: React.ReactNode;
+}
+
+// Descendant[] → plain text 변환 함수
+function extractPlainText(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    // Slate Descendant[] 구조
+    return content.map(node => {
+      if (typeof node.text === 'string') return node.text;
+      if (Array.isArray(node.children)) return extractPlainText(node.children);
+      if (typeof node.children === 'object') return extractPlainText(node.children);
+      return '';
+    }).join(' ');
+  }
+  return '';
 }
 
 export const StoryViewer: React.FC<StoryViewerProps> = ({ 
@@ -75,175 +93,239 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({
   const [likeCount, setLikeCount] = useState(story.reactionCount || 0);
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [bookmarkCount, setBookmarkCount] = useState(story.bookmarkCount || 0);
+  const [classicSectionIndex, setClassicSectionIndex] = useState(0);
+  const [classicSections, setClassicSections] = useState<Section[]>([]);
 
   // 내용을 챕터와 섹션으로 분리
   useEffect(() => {
     if (!story || !story.content) return;
 
-    const content = story.content;
-    const lines = content.split('\n');
-    let currentChapters: Chapter[] = [];
-    let currentChapterId = '';
-    let currentChapterTitle = '';
-    let currentSectionContent: string[] = [];
-    let currentSectionId = '';
-    let currentSectionTitle = '';
-
-    // 클래식 뷰일 때 로그 출력 (viewMode 사용)
-    if (viewMode === 'classic') {
-      console.log('클래식 뷰 모드에서 자서전 내용 파싱 중');
+    // content가 stringified JSON일 경우 파싱
+    let parsedContent: unknown = story.content;
+    if (typeof story.content === 'string') {
+      try {
+        const obj = JSON.parse(story.content);
+        if (obj && obj.chapters) {
+          parsedContent = obj;
+        }
+      } catch {
+        // string fallback (기존 마크다운 등)
+      }
     }
 
-    lines.forEach((line) => {
-      // 챕터 제목 감지 (예: "# 1장: 어린 시절", "# 제1장: 어린 시절")
-      const chapterMatch = line.match(/^#\s+(제)?(\d+)장:?\s+(.+)$/);
-      if (chapterMatch) {
-        // 이전 섹션이 있으면 저장
-        if (currentSectionId && currentSectionTitle) {
-          const chapterIndex = currentChapters.findIndex(c => c.id === currentChapterId);
-          if (chapterIndex >= 0) {
-            currentChapters[chapterIndex].sections.push({
-              id: currentSectionId,
-              title: currentSectionTitle || '',  // 빈 제목은 그대로 빈 문자열로 유지
-              content: currentSectionContent.join('\n'),
-              isQuote: false
-            });
-          }
+    // 구조화된 content(chapters) 지원
+    if (typeof parsedContent === 'object' && parsedContent !== null && 'chapters' in parsedContent) {
+      // Firestore 구조화 자서전: chapters/sections/content(Descendant[])
+      const chaptersData: Chapter[] = (parsedContent as { chapters: Chapter[] }).chapters.map((chapter) => ({
+        id: chapter.id,
+        title: chapter.title,
+        sections: Array.isArray(chapter.sections)
+          ? (chapter.sections as Section[]).map((section) => ({
+              id: section.id,
+              title: section.title,
+              content: section.content, // Descendant[] 그대로 전달
+              isQuote: section.isQuote ?? false
+            }))
+          : []
+      }));
+      setChapters(chaptersData);
+      if (chaptersData.length > 0) {
+        setCurrentChapter(chaptersData[0].id);
+        if (chaptersData[0].sections.length > 0) {
+          setCurrentSection(chaptersData[0].sections[0].id);
         }
+      }
+      return;
+    }
 
-        const chapterNum = chapterMatch[2];
-        const title = chapterMatch[3];
-        currentChapterId = `chapter-${chapterNum}`;
-        currentChapterTitle = `${chapterNum}장: ${title}`;
-        
-        // 첫 챕터이거나 새 챕터면 추가
-        if (!currentChapters.some(c => c.id === currentChapterId)) {
-          currentChapters.push({
-            id: currentChapterId,
-            title: currentChapterTitle,
-            sections: []
-          });
-        }
+    // 기존 string content 파싱 (fallback)
+    if (typeof story.content === 'string') {
+      const content = story.content;
+      const lines: string[] = typeof content === 'string' ? (content as string).split('\n') : [];
+      let currentChapters: Chapter[] = [];
+      let currentChapterId = '';
+      let currentChapterTitle = '';
+      let currentSectionContent: string[] = [];
+      let currentSectionId = '';
+      let currentSectionTitle = '';
 
-        // 새 섹션 시작
-        currentSectionId = `${currentChapterId}-intro`;
-        currentSectionTitle = '';
-        currentSectionContent = [];
-        return;
+      // 클래식 뷰일 때 로그 출력 (viewMode 사용)
+      if (viewMode === 'classic') {
+        console.log('클래식 뷰 모드에서 자서전 내용 파싱 중');
       }
 
-      // 섹션 제목 감지 (예: "## 첫 번째 기억")
-      const sectionMatch = line.match(/^##\s+(.+)$/);
-      if (sectionMatch && currentChapterId) {
-        // 이전 섹션이 있으면 저장
-        if (currentSectionId && currentSectionTitle) {
-          const chapterIndex = currentChapters.findIndex(c => c.id === currentChapterId);
-          if (chapterIndex >= 0) {
-            currentChapters[chapterIndex].sections.push({
-              id: currentSectionId,
-              title: currentSectionTitle || '',  // 빈 제목은 그대로 빈 문자열로 유지
-              content: currentSectionContent.join('\n'),
-              isQuote: false
+      lines.forEach((line) => {
+        // 챕터 제목 감지 (예: "# 1장: 어린 시절", "# 제1장: 어린 시절")
+        const chapterMatch = line.match(/^#\s+(제)?(\d+)장:?\s+(.+)$/);
+        if (chapterMatch) {
+          // 이전 섹션이 있으면 저장
+          if (currentSectionId && currentSectionTitle) {
+            const chapterIndex = currentChapters.findIndex(c => c.id === currentChapterId);
+            if (chapterIndex >= 0) {
+              currentChapters[chapterIndex].sections.push({
+                id: currentSectionId,
+                title: currentSectionTitle || '',  // 빈 제목은 그대로 빈 문자열로 유지
+                content: currentSectionContent.join('\n'),
+                isQuote: false
+              });
+            }
+          }
+
+          const chapterNum = chapterMatch[2];
+          const title = chapterMatch[3];
+          currentChapterId = `chapter-${chapterNum}`;
+          currentChapterTitle = `${chapterNum}장: ${title}`;
+          
+          // 첫 챕터이거나 새 챕터면 추가
+          if (!currentChapters.some(c => c.id === currentChapterId)) {
+            currentChapters.push({
+              id: currentChapterId,
+              title: currentChapterTitle,
+              sections: []
             });
           }
-        }
 
-        const title = sectionMatch[1];
-        currentSectionId = `${currentChapterId}-section-${currentChapters.find(c => c.id === currentChapterId)?.sections.length || 0}`;
-        currentSectionTitle = title;
-        currentSectionContent = [];
-        return;
-      }
-
-      // 인용구 감지 (> 로 시작하는 줄)
-      const quoteMatch = line.match(/^>\s+(.+)$/);
-      if (quoteMatch && currentChapterId) {
-        const quoteText = quoteMatch[1];
-        const chapterIndex = currentChapters.findIndex(c => c.id === currentChapterId);
-        
-        if (chapterIndex >= 0) {
-          // 이전 내용이 있으면 먼저 저장
-          if (currentSectionContent.length > 0) {
-            currentChapters[chapterIndex].sections.push({
-              id: currentSectionId,
-              title: currentSectionTitle || '',
-              content: currentSectionContent.join('\n'),
-              isQuote: false
-            });
-            
-            // 다음 섹션을 위한 ID 준비
-            currentSectionId = `${currentChapterId}-section-${currentChapters[chapterIndex].sections.length}`;
-            currentSectionContent = [];
-          }
-          
-          // 인용구 전용 섹션 추가
-          const quoteId = `${currentChapterId}-quote-${currentChapters[chapterIndex].sections.length}`;
-          currentChapters[chapterIndex].sections.push({
-            id: quoteId,
-            title: '인용구',
-            content: quoteText,
-            isQuote: true
-          });
-          
-          // 인용문 이후의 내용을 위한 새 섹션 준비
-          currentSectionId = `${currentChapterId}-section-${currentChapters[chapterIndex].sections.length}`;
+          // 새 섹션 시작
+          currentSectionId = `${currentChapterId}-intro`;
           currentSectionTitle = '';
           currentSectionContent = [];
+          return;
         }
-        return;
-      }
 
-      // 일반 내용 추가
-      if (currentChapterId && currentSectionId) {
-        currentSectionContent.push(line);
-      }
-    });
+        // 섹션 제목 감지 (예: "## 첫 번째 기억")
+        const sectionMatch = line.match(/^##\s+(.+)$/);
+        if (sectionMatch && currentChapterId) {
+          // 이전 섹션이 있으면 저장
+          if (currentSectionId && currentSectionTitle) {
+            const chapterIndex = currentChapters.findIndex(c => c.id === currentChapterId);
+            if (chapterIndex >= 0) {
+              currentChapters[chapterIndex].sections.push({
+                id: currentSectionId,
+                title: currentSectionTitle || '',  // 빈 제목은 그대로 빈 문자열로 유지
+                content: currentSectionContent.join('\n'),
+                isQuote: false
+              });
+            }
+          }
 
-    // 마지막 섹션 저장
-    if (currentSectionId && currentChapterTitle && currentChapterId) {
-      const chapterIndex = currentChapters.findIndex(c => c.id === currentChapterId);
-      if (chapterIndex >= 0 && currentSectionContent.length > 0) {
-        currentChapters[chapterIndex].sections.push({
-          id: currentSectionId,
-          title: currentSectionTitle || '',  // 빈 제목은 그대로 빈 문자열로 유지
-          content: currentSectionContent.join('\n'),
-          isQuote: false
-        });
-      }
-    }
+          const title = sectionMatch[1];
+          currentSectionId = `${currentChapterId}-section-${currentChapters.find(c => c.id === currentChapterId)?.sections.length || 0}`;
+          currentSectionTitle = title;
+          currentSectionContent = [];
+          return;
+        }
 
-    // 챕터가 없으면 전체 내용을 하나의 챕터로
-    if (currentChapters.length === 0 && content.trim()) {
-      currentChapters = [{
-        id: 'chapter-1',
-        title: '자서전',
-        sections: [{
-          id: 'chapter-1-section-0',
-          title: '전체 내용',
-          content: content,
-          isQuote: false
-        }]
-      }];
-    }
+        // 인용구 감지 (> 로 시작하는 줄)
+        const quoteMatch = line.match(/^>\s+(.+)$/);
+        if (quoteMatch && currentChapterId) {
+          const quoteText = quoteMatch[1];
+          const chapterIndex = currentChapters.findIndex(c => c.id === currentChapterId);
+          
+          if (chapterIndex >= 0) {
+            // 이전 내용이 있으면 먼저 저장
+            if (currentSectionContent.length > 0) {
+              currentChapters[chapterIndex].sections.push({
+                id: currentSectionId,
+                title: currentSectionTitle || '',
+                content: currentSectionContent.join('\n'),
+                isQuote: false
+              });
+              
+              // 다음 섹션을 위한 ID 준비
+              currentSectionId = `${currentChapterId}-section-${currentChapters[chapterIndex].sections.length}`;
+              currentSectionContent = [];
+            }
+            
+            // 인용구 전용 섹션 추가
+            const quoteId = `${currentChapterId}-quote-${currentChapters[chapterIndex].sections.length}`;
+            currentChapters[chapterIndex].sections.push({
+              id: quoteId,
+              title: '인용구',
+              content: quoteText,
+              isQuote: true
+            });
+            
+            // 인용문 이후의 내용을 위한 새 섹션 준비
+            currentSectionId = `${currentChapterId}-section-${currentChapters[chapterIndex].sections.length}`;
+            currentSectionTitle = '';
+            currentSectionContent = [];
+          }
+          return;
+        }
 
-    // 최종 파싱된 섹션의 순서 확인
-    currentChapters.forEach((chapter, chapterIndex) => {
-      console.log(`챕터 ${chapterIndex + 1}: ${chapter.title}`);
-      chapter.sections.forEach((section, sectionIndex) => {
-        console.log(`  섹션 ${sectionIndex + 1}: ${section.title} (인용문: ${section.isQuote ? 'O' : 'X'})`);
+        // 일반 내용 추가
+        if (currentChapterId && currentSectionId) {
+          currentSectionContent.push(line);
+        }
       });
-    });
 
-    setChapters(currentChapters);
-    
-    // 초기 챕터와 섹션 설정
-    if (currentChapters.length > 0) {
-      setCurrentChapter(currentChapters[0].id);
-      if (currentChapters[0].sections.length > 0) {
-        setCurrentSection(currentChapters[0].sections[0].id);
+      // 마지막 섹션 저장
+      if (currentSectionId && currentChapterTitle && currentChapterId) {
+        const chapterIndex = currentChapters.findIndex(c => c.id === currentChapterId);
+        if (chapterIndex >= 0 && currentSectionContent.length > 0) {
+          currentChapters[chapterIndex].sections.push({
+            id: currentSectionId,
+            title: currentSectionTitle || '',  // 빈 제목은 그대로 빈 문자열로 유지
+            content: currentSectionContent.join('\n'),
+            isQuote: false
+          });
+        }
+      }
+
+      // 챕터가 없으면 전체 내용을 하나의 챕터로
+      if (currentChapters.length === 0 && typeof content === 'string' && (content as string).trim()) {
+        currentChapters = [{
+          id: 'chapter-1',
+          title: '자서전',
+          sections: [{
+            id: 'chapter-1-section-0',
+            title: '전체 내용',
+            content: content,
+            isQuote: false
+          }]
+        }];
+      }
+
+      // 최종 파싱된 섹션의 순서 확인
+      currentChapters.forEach((chapter, chapterIndex) => {
+        console.log(`챕터 ${chapterIndex + 1}: ${chapter.title}`);
+        chapter.sections.forEach((section, sectionIndex) => {
+          console.log(`  섹션 ${sectionIndex + 1}: ${section.title} (인용문: ${section.isQuote ? 'O' : 'X'})`);
+        });
+      });
+
+      setChapters(currentChapters);
+      
+      // 초기 챕터와 섹션 설정
+      if (currentChapters.length > 0) {
+        setCurrentChapter(currentChapters[0].id);
+        if (currentChapters[0].sections.length > 0) {
+          setCurrentSection(currentChapters[0].sections[0].id);
+        }
       }
     }
   }, [story, viewMode]);
+
+  // 클래식 뷰용 섹션 플랫화
+  useEffect(() => {
+    if (viewMode !== 'classic') return;
+    // 구조화 자서전
+    if (chapters.length > 0) {
+      const allSections = chapters.flatMap(chap => chap.sections);
+      setClassicSections(allSections);
+      setClassicSectionIndex(0);
+    } else if (typeof story.content === 'string') {
+      // string fallback: 한 섹션으로 취급
+      setClassicSections([
+        {
+          id: 'classic-0',
+          title: story.title || '자서전',
+          content: story.content,
+        }
+      ]);
+      setClassicSectionIndex(0);
+    }
+  }, [chapters, story.content, story.title, viewMode]);
 
   // 댓글 불러오기
   useEffect(() => {
@@ -274,13 +356,17 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({
         const res = await fetch(`/api/story/${story.id}/isLiked?userId=${currentUser.uid}`);
         const data = await res.json();
         setIsLiked(data.liked);
-      } catch {}
+      } catch {
+        // 좋아요 여부 확인 실패 시 무시
+      }
       // 북마크 여부 확인
       try {
         const res = await fetch(`/api/story/${story.id}/isBookmarked?userId=${currentUser.uid}`);
         const data = await res.json();
         setIsBookmarked(data.bookmarked);
-      } catch {}
+      } catch {
+        // 북마크 여부 확인 실패 시 무시
+      }
     }
     fetchReactionAndBookmark();
   }, [currentUser, story?.id]);
@@ -557,37 +643,64 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({
         ref={contentRef}
         className={`min-h-screen relative w-full ${hasHeader ? 'pt-[90px]' : 'pt-[90px]'} lg:pt-0`}
       >
-        {/* 표지 (첫 페이지) */}
-        <StoryCover
-          title={story.title}
-          authorName={story.authorName || '작가님'}
-          readingTime={Math.round(story.content.split(/\s+/).length / 200)} // 읽기 시간 추정
-        />
-        {chapters.map((chapter) => (
-          <React.Fragment key={chapter.id}>
-            {/* 챕터 제목 표시 */}
-            <ChapterTitle id={chapter.id} title={chapter.title} />
-            {chapter.sections
-              .filter(section => section.content.trim().length > 0)
-              .map((section, sectionIndex) => {
-                const themeIndex = Math.floor(Math.random() * THEMES.length);
-                const theme = THEMES[themeIndex];
-                const isHighlight = isHighlightParagraph(section.content);
-                return (
-                  <StoryPage
-                    key={section.id}
-                    sectionId={section.id}
-                    title={section.title}
-                    content={section.content}
-                    backgroundColor={theme.bg}
-                    textColor={theme.text}
-                    isHighlight={isHighlight}
-                    index={sectionIndex}
-                  />
-                );
-              })}
-          </React.Fragment>
-        ))}
+        {/* 클래식 뷰: 한 번에 한 섹션씩 슬라이드 */}
+        {viewMode === 'classic' && classicSections.length > 0 ? (
+          <div className="min-h-screen flex flex-col items-center justify-center bg-white text-black px-4 py-16">
+            <div className="max-w-2xl w-full mx-auto">
+              <h2 className="text-lg font-bold mb-4 text-center">{classicSections[classicSectionIndex].title}</h2>
+              <div className="whitespace-pre-line text-base leading-relaxed">
+                {typeof classicSections[classicSectionIndex].content === 'string'
+                  ? classicSections[classicSectionIndex].content
+                  : extractPlainText(classicSections[classicSectionIndex].content)}
+              </div>
+            </div>
+            <div className="flex justify-between items-center w-full max-w-2xl mt-12">
+              <button
+                className="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-50"
+                onClick={() => setClassicSectionIndex(i => Math.max(i - 1, 0))}
+                disabled={classicSectionIndex === 0}
+              >이전</button>
+              <span className="px-2 text-gray-600">{classicSectionIndex + 1} / {classicSections.length}</span>
+              <button
+                className="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300 disabled:opacity-50"
+                onClick={() => setClassicSectionIndex(i => Math.min(i + 1, classicSections.length - 1))}
+                disabled={classicSectionIndex === classicSections.length - 1}
+              >다음</button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* 표지 (첫 페이지) */}
+            <StoryCover
+              title={story.title}
+              authorName={story.authorName || '작가님'}
+              readingTime={typeof story.content === 'string' ? Math.round((story.content as string).split(/\s+/).length / 200) : 1} // 읽기 시간 추정
+            />
+            {chapters.map((chapter) => (
+              <React.Fragment key={chapter.id}>
+                {/* 챕터 제목 표시 */}
+                <ChapterTitle id={chapter.id} title={chapter.title} />
+                {chapter.sections.map((section, sectionIndex) => {
+                  const themeIndex = Math.floor(Math.random() * THEMES.length);
+                  const theme = THEMES[themeIndex];
+                  const isHighlight = typeof section.content === 'string' ? isHighlightParagraph(section.content as string) : false;
+                  return (
+                    <StoryPage
+                      key={section.id}
+                      sectionId={section.id}
+                      title={section.title}
+                      content={section.content}
+                      backgroundColor={theme.bg}
+                      textColor={theme.text}
+                      isHighlight={isHighlight}
+                      index={sectionIndex}
+                    />
+                  );
+                })}
+              </React.Fragment>
+            ))}
+          </>
+        )}
         {/* 마무리 페이지 - 사용자 정의 가능 */}
         <StoryEnding 
           authorName={story.authorName || '작가님'} 

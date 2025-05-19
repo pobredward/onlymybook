@@ -18,7 +18,7 @@ export default function WriteMethodSelect() {
     
     // 페이지 이동
     if (method === 'ai') {
-      router.push('/write/personal');
+      router.push('/write/narrative');
     } else {
       router.push('/write/manual');
     }
