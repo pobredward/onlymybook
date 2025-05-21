@@ -32,6 +32,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ko" className={`${inter.variable} ${notoSerifKr.variable}`}>
+      <head>
+        <meta name="google-adsense-account" content="ca-pub-5100840159526765" />
+      </head>
       <body className="min-h-screen bg-white font-sans">
         <AuthProvider>
           {children}
