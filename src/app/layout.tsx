@@ -34,6 +34,8 @@ export default function RootLayout({
     <html lang="ko" className={`${inter.variable} ${notoSerifKr.variable}`}>
       <head>
         <meta name="google-adsense-account" content="ca-pub-5100840159526765" />
+        <meta name="naver-site-verification" content="927344276fe0dd139edd83ab1911b186116e3ec8" />
+      
       </head>
       <body className="min-h-screen bg-white font-sans">
         <AuthProvider>
