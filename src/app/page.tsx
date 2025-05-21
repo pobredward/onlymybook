@@ -21,11 +21,11 @@ export default function Home() {
             {/* 왼쪽: 텍스트 */}
             <div className="flex-1 flex flex-col items-center lg:items-start text-center lg:text-left animate-fade-in">
               <h1 className="text-5xl sm:text-6xl md:text-7xl font-extrabold tracking-tight text-gray-900 leading-tight mb-6">
-                <span className="block">나만의 인생,</span>
-                <span className="block text-blue-600 drop-shadow-md">디지털 책으로</span>
+                <span className="block">디지털 자서전 작성법</span>
+                <span className="block">자기소개서와 인생 기록, 자기계발 스토리까지</span>
               </h1>
               <p className="mt-2 text-lg sm:text-xl md:text-2xl text-gray-600 max-w-xl mb-8 animate-fade-in" style={{animationDelay:'0.2s'}}>
-                당신의 소중한 이야기를 지금 바로 기록해보세요.
+                디지털 자서전, 자기소개서, 인생 기록, 자기계발 스토리, 온라인 자서전 만들기 등 다양한 자기표현 방법과 기록 노하우를 한 곳에서 만나보세요.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto animate-fade-in" style={{animationDelay:'0.4s'}}>
                 <Link href={getStartLink}>
@@ -218,3 +218,32 @@ export default function Home() {
     </MainLayout>
   );
 }
+
+export const metadata = {
+  title: '디지털 자서전 작성법 | 자기소개서와 인생 기록 팁',
+  description: '디지털 자서전, 자기소개서 작성법, 인생 기록 방법, 자기계발 스토리, 온라인 자서전 만들기 등 최신 트렌드 기반의 자기표현과 기록 노하우를 제공합니다.',
+  keywords: '디지털 자서전, 자기소개서 작성법, 인생 기록 방법, 자기계발 스토리, 온라인 자서전 만들기, 에세이 작성 팁, 자기표현 방법, 디지털 기록 도구, 자기개발 콘텐츠, 개인 브랜딩 전략',
+  openGraph: {
+    title: '디지털 자서전 작성법 | 자기소개서와 인생 기록 팁',
+    description: '디지털 자서전, 자기소개서 작성법, 인생 기록 방법, 자기계발 스토리, 온라인 자서전 만들기 등 최신 트렌드 기반의 자기표현과 기록 노하우를 제공합니다.',
+    url: 'https://onlymybook.com',
+    siteName: '디지털 자서전',
+    images: [
+      {
+        url: '/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: '디지털 자서전 OG 이미지',
+      },
+    ],
+    locale: 'ko_KR',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: '디지털 자서전 작성법 | 자기소개서와 인생 기록 팁',
+    description: '디지털 자서전, 자기소개서 작성법, 인생 기록 방법, 자기계발 스토리, 온라인 자서전 만들기 등 최신 트렌드 기반의 자기표현과 기록 노하우를 제공합니다.',
+    images: ['/og-image.png'],
+    site: '@onlymybook',
+  },
+};
