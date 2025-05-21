@@ -61,3 +61,29 @@ npm run dev
 ## 라이선스
 
 MIT
+
+## 운영 및 SEO 가이드
+
+### 1. robots.txt
+- 모든 검색엔진 크롤러 허용
+- 사이트맵 경로 명시
+- `public/robots.txt`에서 관리
+
+### 2. 사이트맵
+- `next-sitemap`으로 자동 생성
+- `npm run postbuild` 또는 배포 시 자동 생성
+- `public/sitemap.xml` 및 세부 사이트맵 파일 확인
+
+### 3. 구글/네이버 웹마스터 도구 등록
+- https://search.google.com/search-console/about
+- https://searchadvisor.naver.com/robot/registration
+- 사이트맵 제출: `https://onlymybook.com/sitemap.xml`
+- 소유확인 메타태그는 `src/app/layout.tsx`에 삽입
+
+### 4. SEO 메타데이터
+- 핵심/연관 키워드 기반 메타데이터 적용
+- `src/app/layout.tsx`, `src/app/page.tsx` 참고
+
+### 5. 기타
+- 배포 후 robots.txt, sitemap.xml 정상 노출 확인
+- 추가 SEO 자동화, 블로그/콘텐츠 자동화 등은 별도 요청
